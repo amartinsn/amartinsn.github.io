@@ -5,6 +5,26 @@ comments:   true
 tags:
 - jekyll
 - code
+- fulano
+- adulto
+- design
+- domain-driven design
+- object-oriented programming
+- architecture
+- software
+- lessons learned
+- globo.com
+- qualquer
+- coisa
+- que
+- faça
+- encher
+- aquela
+- lista
+- de
+- tags
+- inúteis
+summary:    "This is a post summary I wanna see on the tags page."
 ---
 
 ## Throw It Away and Build From Scratch? ##

@@ -201,3 +201,17 @@ pre {
         }
     }
 }
+
+
+/**
+ * Taglist
+ */
+ .taglist {
+   font-size: 0.8em;
+   margin-top: 3em;
+   text-align: right;
+
+   .tag {
+     padding: 0 0.1em 0;
+   }
+ }
