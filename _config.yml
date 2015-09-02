@@ -52,8 +52,3 @@ social:
     share_url:
     share_title:
     share_link:
-
-analytics :
-  provider : google
-  google :
-      tracking_id : 'UA-67119919-1'
