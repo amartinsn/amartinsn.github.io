@@ -1,15 +1,61 @@
-# Site settings
-title: alexandre martins
-email: amartinsn@gmail.com
-description: > # this means to ignore newlines until "baseurl:"
-  Write an awesome description for your new site here. You can edit this
-  line in _config.yml. It will appear in your document head meta (for
-  Google search results) and in your feed.xml site description.
-baseurl: "" # the subpath of your site, e.g. /blog/
-url: "http://alexmartins.me" # the base hostname & protocol for your site
-twitter_username: amartinsn
-github_username:  amartinsn
-
 # Build settings
-markdown: kramdown
-permalink: /:year/:month/:day/:title.html
+markdown: redcarpet
+highlighter: pygments
+gems:
+  - jemoji
+
+# Site settings
+title: "Alexandre Martins"
+description: > # this means to ignore newlines until "email:"
+   CEO of Industrial Logic. Experimenting with a new way of working called Anzeneering: safety as a precondition for unlocking our potential.
+
+email: amartinsn@gmail.com
+#blog logo
+logo: "/assets/images/author.jpg"
+# blog cover
+cover: "/assets/images/cA4aKEIPQrerBnp1yGHv_IMG_9534-3-2.jpg"
+
+name: "Alexandre Martins"
+author: "Alexandre Martins"
+author_image: "/assets/images/author.jpg"
+author_bio: "CEO of Industrial Logic. Experimenting with a new way of working called Anzeneering: safety as a precondition for unlocking our potential."
+
+paginate:	5
+
+url: "http://alexmartins.me"
+baseurl: ""
+#used to display twitter cards
+twitter_handle: '@amartinsn'
+
+#fill in disqus shortname to use disqus
+disqus: alexmartins
+
+# social icons and sharing options
+social:
+  - icon:	twitter
+    url:	https://twitter.com/amartinsn
+    desc: Follow me on twitter
+    share_url: http://twitter.com/share
+    share_title: ?text=
+    share_link: "&amp;url="
+
+#  - icon:	facebook
+#    url:	https://facebook.com/???
+#    desc: Connect with me facebook
+#    share_url: https://www.facebook.com/sharer.php
+#    share_title: ?t=
+#    share_link: "&amp;u="
+
+  - icon:	github
+    url:	https://github.com/amartinsn
+    desc:	Fork me on github
+    share_url:
+    share_title:
+    share_link:
+
+#  - icon:	google-plus
+#    url:	https://google.com/???
+#    desc:	Add me on google+
+#    share_url:
+#    share_title:
+#    share_link:
