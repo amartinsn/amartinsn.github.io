@@ -7,7 +7,7 @@ gems:
 # Site settings
 title: "Alexandre Martins"
 description: > # this means to ignore newlines until "email:"
-   CEO of Industrial Logic. Experimenting with a new way of working called Anzeneering: safety as a precondition for unlocking our potential.
+   Tech Lead and Agile Coach. Currently helping building the technology vision and architecture of Globo's video streaming platform.
 
 email: amartinsn@gmail.com
 #blog logo
@@ -18,7 +18,7 @@ cover: "/assets/images/cA4aKEIPQrerBnp1yGHv_IMG_9534-3-2.jpg"
 name: "Alexandre Martins"
 author: "Alexandre Martins"
 author_image: "/assets/images/author.jpg"
-author_bio: "CEO of Industrial Logic. Experimenting with a new way of working called Anzeneering: safety as a precondition for unlocking our potential."
+author_bio: "Tech Lead and Agile Coach. Currently helping building the technology vision and architecture of Globo's video streaming platform."
 
 paginate:	5
 
@@ -49,6 +49,13 @@ social:
   - icon:	github
     url:	https://github.com/amartinsn
     desc:	Fork me on github
+    share_url:
+    share_title:
+    share_link:
+
+  - icon:	linkedin
+    url:	https://linkedin.com/in/amartinsn
+    desc:	View my LinkedIn profile
     share_url:
     share_title:
     share_link:
