@@ -9,7 +9,7 @@ tags:
 - object-oriented design
 ---
 
-These days, reading the [Goos](http://www.amazon.com/Growing-Object-Oriented-Software-Guided-Tests/dp/0321503627) book, written by [Steve Freeman](http://www.m3p.co.uk/blog) and [Nat Pryce](http://www.natpryce.com), it reminded me of a project I worked on a while ago. It was a one year old system, poorly tested, integrating to a handful of other systems, and the code-base... well I prefer not to remember. Despite this scenario, I joined the team to help them implement some new functionalities.
+Recently, reading [Growing Object Oriented Software Guided Tests](http://www.amazon.com/Growing-Object-Oriented-Software-Guided-Tests/dp/0321503627), written by [Steve Freeman](http://www.m3p.co.uk/blog) and [Nat Pryce](http://www.natpryce.com), it reminded me of a project I worked on a while ago. It was a one year old system, poorly tested, integrating to a handful of other systems, and the code-base... well I prefer not to remember. Despite this scenario, I joined the team to help them implement some new functionalities.
 
 I remember sometimes it was difficult to write tests, the classes were tightly coupled, with no clear responsibilities, several attributes, bloated constructors, etc. And despite our best effort, working around the bits that were preventing us from writing the tests, we felt we were getting down the wrong road, trying to do it in such a crappy code-base. As a result some of our tests were massive! A bunch of lines of mocks, stubs, and expectations, making it impossible to understand their purpose.
 
