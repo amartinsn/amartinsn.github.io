@@ -3,41 +3,35 @@ layout:     post
 title:      "Lessons Learned From Software Rewrites"
 comments:   true
 tags:
-- jekyll
-- code
-summary:    "This is a post summary I wanna see on the tags page."
+- architecture
+- software design
+- refactoring
 ---
 
-## Throw It Away and Build From Scratch? ##
+By the end of 2013 I joined a team challenging myself to help them improve one of the most critical products on my company’s portfolio. One of its components was an API, built back in 2004 and was used by pretty much all other products in our organization. This API was implemented using Java and the EJB stack. It had two interfaces with clients, the EJB client interface and a feature incomplete HTTP (RESTfulish) interface, built on top of that EJB client.
 
-First time I joined a project with a demand to improve an existing system, we decided to rebuild it all again from scratch. For us, that was a common sense, as none of us liked the stack and the code was really difficult to understand. So starting from scratch seemed to be the easiest way to go. Green field project, cutting edge stack, perfect! Well, not really...
-
-As the old system was still being used, requests for bug fixes, improvements and new features continued to pop up frequently, and ensuring we were caught up with all that was really time-consuming. Not to mention we ended up spending a lot of time re-implementing features no one was using, which was pointless.
-
-Another problem is the transition to the new system once it’s ready to be integrated. It might take a while, as other teams need to prioritize this work on their backlogs, and in the meantime, the other system might continue changing and there you are, left behind again.
-
-So one lesson I learned from this experience was that, unless you have a really good reason, don’t rewrite everything from scratch. There is a much better way I will describe later on.
-
-## Applying Some Lessons Learned ##
-
-By the end of 2013 I joined a team challenging myself to help them improve one of the most problematic and important products on my company’s portfolio. The most critical component of this product is the API, built back in 2004 using Java and EJB. It had two interfaces with users, the EJB client interface and a feature incomplete HTTP (RESTfulish) interface, built on top of that EJB client.
-
-A group of developers made a great effort to rewrite the whole API from scratch in 2011. They rebuilt it on top of a more recent stack, exposing features as RESTful webservices and most importantly, they introduced a decent suite of tests, which was quite hard on the EJB stack. This new architecture is better described on the picture below:
+A couple of years before I join this team, a group of developers made a great effort to rewrite this API from scratch. They continued using Java but chose other technologies such as Spring and Jersey, which was a good decision in my opinion. The features were now exposed as RESTful webservices and most importantly, they introduced a decent suite of tests, which was quite hard on the EJB stack. The new architecture is better described on the picture below:
 
 ***** picture of the architecture* ______
 
 
-### Problems with the new architecture ###
+### Consequences of rewriting from scratch
 
-The new API was indeed much easier to use than the other one, but it also brought up some really bad consequences.
+The new API was indeed much easier to use than the other one and was fully tested, which gave the team much more confidence to extend it. But writing a new system from scratch also introduced some undesired consequences.
 
-Some clients didn't prioritize the effort to migrate to the new API, preventing the team from turn the old implementation off. As a result, it ended up introducing a really bad problem, two systems sharing the same database schema.
+With the new implementation ready to rollout, clients needed to prioritize this migration on their backlogs. Most of them did it but a few ones didn't, preventing the team from shutting the old system down. And that was the scenario I found when I joined them in 2013.
 
-There's a lot out there talking about the problems of having a shared database schema. Sam Newman recently wrote about that on his new book. Also Martin Fowler describes this pattern (or anti-pattern) in greater detail on a book called Enterprise Integration Patterns. And from this book I extracted a snippet describing the exact problem it was causing in our company.
+***** picture of the architecture after the rewrite* ______
 
-> The fact that Shared Database has unencapsulated data also makes it more difficult to maintain a family of integrated applications. Many changes in any application can trigger a change in the database, and database changes have a considerable ripple effect through every application. As a result, organizations that use Shared Database are often very reluctant to change the database, which means that the application development work is much less responsive to the changing needs of the business. *- Enterprise Integration Patterns*
+As you can see from the picture above, there are two APIs doing pretty much the same thing, one used by most of our clients and another still used by a few ones. And to make things worse, both systems share the same database, which today is our most critical pain point.
 
-### Our plan to fix it ###
+There's a lot out there talking about the problems of having shared databases and I won't go into details on that. Sam Newman wrote about that on his new book Building Microservices. Also Martin Fowler describes this pattern (or anti-pattern) in greater detail on one of his series books, Enterprise Integration Patterns.
+
+For us, the main problem was that, for any changes on either systems, such as new features or bug fixes, which triggered a change in the database, it would potentially break the other system, causing a ripple effect through every application that uses it. As a result, any database change required an extra effort from the team maintaining the other system, which was turning our development work much less responsive to business demands.
+
+This is what Mary and Tom Poppendieck call a demand of failure, not a wise way to spend your company's money.
+
+### Our plan to fix it
 
 The scenario I described above was the one I found when I joined this team, and with the takeaways from my previous experience I started looking how people were dealing with software rewrites out there. The goal was to seamlessly move everyone still using the old system to the new one, so we could kill it! (explore more shared database problem?).
 
