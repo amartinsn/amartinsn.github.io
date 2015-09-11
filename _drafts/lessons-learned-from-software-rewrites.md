@@ -20,7 +20,7 @@ The new API was indeed much easier to use than the other one and was fully teste
 
 With the new implementation ready to rollout, clients needed to prioritize this migration on their backlogs. Most of them did it but a few ones didn't, preventing the team from shutting the old system down. That was the scenario I found when I joined them in 2013.
 
-![](/assets/article_images/lessons-learned-from-software-rewrites/joining.png)
+![](/assets/article_images/lessons-learned-from-software-rewrites/rebuild.png)
 
 As you can see from the picture above, there are two APIs doing pretty much the same thing, one used by most of our clients and another still used by a few ones. And to make things worse, both systems share the same database, which today is our most critical pain point.
 
@@ -30,7 +30,13 @@ For us, the main problem was that, for every changes on either systems, such as 
 
 ### Our plan to improve this architecture
 
-With the scenario described at hand, our main goal became to seamlessly migrate the rest of our clients to the new API. But we didn't want to depend on them to be able to do that, so we decided to turn the new API into a Strangler Application. By doing that, we could transition users feature-by-feature incrementally, in constant releases. Once no one was using a feature we could then delete it from the codebase. We knew the effort was going to be humongous, so we needed to somehow find a way to make this process more effective.
+With the scenario described at hand, our main goal became to seamlessly migrate the rest of our clients to the new API. But we didn't want to depend on them to be able to accomplish that, so we decided to turn the new API into a Strangler Application. By doing that we could transition users, feature-by-feature, to the new implementation and then delete the old implementation from the codebase.
+
+Our strategy was to implement some kind of HTTP [Content-Based Router](http://www.enterpriseintegrationpatterns.com/ContentBasedRouter.html) to intercept every call to both APIs, where we could specify which API implementation would handle a request to given endpoint. Once we decide that a feature **A** is now handled by the new implementation, all we needed to do was configure that on the router, and implement a [filter](http://www.enterpriseintegrationpatterns.com/patterns/messaging/PipesAndFilters.html) to translate the response to the old contract, expected by the client. It's essential to be able to switch between implementations, in case of a need to rollback the transition.
+
+![](/assets/article_images/lessons-learned-from-software-rewrites/strangle.png)
+
+We knew the effort was going to be humongous, so we needed to somehow find a way to make this process more effective.
 
 #### Reducing workload by looking for "dead" features
 
@@ -42,9 +48,9 @@ Both points were quite useful and inspired us on our first action to turn this p
 
 This strategy reduced the amount of features we'd have to strangle by ~40%, which was a good investment.  
 
-#### Create your safety net
+#### Creating our safety net
 
-The strategy we wanted to use was to implement some kind of smart HTTP proxy (http://www.enterpriseintegrationpatterns.com/ContentBasedRouter.html), and make it intercept every call to our APIs
+
 
 There’s also a principle called Pareto principle, also known as the 80-20 rule, which states that, for many events, roughly 80% of the effects come from 20% of the causes. This is perfectly applicable to software development
 Rewrite feature by feature, starting with the most critical ones
