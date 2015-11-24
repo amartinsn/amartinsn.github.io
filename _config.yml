@@ -1,8 +1,6 @@
 # Build settings
 markdown: redcarpet
 highlighter: pygments
-gems:
-  - jekyll-paginate
 
 # Site settings
 title: "Alexandre Martins"
