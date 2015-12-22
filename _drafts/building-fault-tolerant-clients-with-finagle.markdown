@@ -7,7 +7,6 @@ tags:
 - scala
 - finagle
 ---
-
 We've been using Finagle quite a lot on our current project, and I spent the last few days digging into the `Client` implementation in order to check if we were properly using it and understand what else could it offer us.
 
 Current `Client` implementation comes with support to **Tracing**, **Error Handling**, **Circuit Breakers**, **Monitoring**, among other features, and can be customized be composing it with other `Filters` and `Services`.
@@ -17,7 +16,8 @@ Finagle currently ships with Client implementation for protocols such as **HTTP*
 ```scala
 val client = Http.newClient("google.com:80")
 ```
-This creates a new client for the Google website, and from there, you would be able to easily submit new requests and work with resuls as exposed:
+
+This creates a new client for the Google website, and from there, you would be able to easily submit new requests and work with results as exposed:
 
 ```scala
 val req = Request("/foo", ("param", "bar"))
@@ -26,15 +26,14 @@ req.host = "google.com"
 val resp: Future[Response] = client(req)
 
 ```
+
 Pretty straightforward, isn't? But as you might already know, integrating with other services, specially those out of your control, requires some preventions.you should be prepared for eventual failures on the client execution, due to a variety of reasons some of them exposed on this post.
 
 ### Timeouts
 
 Nowadays pretty much every application deals with networks, which as we all know are fallible for lots of different reasons. When integrating with other systems through the network, it's important to make use of timeouts to prevent your application from waiting forever for a response that might never come. It tells the client when it's time to give up.
 
-Finagle offers a `TimeoutFilter` implementation, which makes this process quite simple.
-
-Finagle allows you to define timeouts globally for every request by using the `TimeoutFilter`.
+Finagle offers a `TimeoutFilter` implementation, which makes this process quite strightforward. You can choose to define timeouts globally for every request.
 
 ```scala
 def timeoutFilter[Req, Rep](duration: Duration) = {
@@ -42,13 +41,14 @@ def timeoutFilter[Req, Rep](duration: Duration) = {
   new TimeoutFilter[Req, Rep](duration, timer)
 }
 ```
+
 Then we can create a HTTP client with support for timeouts, just by hooking the filter to the existing client instance.
 
 ```scala
 val clientWithTimeout = timeoutFilter(1.second) andThen client
 ```
 
-Or we could also specify the timeout criteria per request.
+Or you could specify the timeout criteria for specific requests.
 
 ```scala
 client(req) within 1.second
@@ -56,11 +56,49 @@ client(req) within 1.second
 
 ### Retries
 
+Calls to external services might fail for several reasons, and are classified as **transient failures** and **service failures**. Transient failures, has nothing to do with the service itself, but to a resource that is temporarily under load and cannot respond accordingly. They occur for short periods of time.
 
-### Tracing
+On the other hand Service failures lasts longer, and generally requires some sort of intervention to get fixed. You should have an alternative strategy for when that happens. Fail fast is a good candidate as we'll see later on.
 
+Transient failures are good candidates for retries, as they don't take long to heal. It increases reliability and reduces operational costs with development.
+
+The `RetryFilter` handles exactly the case of a service failure. It acts coordinating retries of service executions that returned either successful or error (exceptions) responses.
+
+The rules for defining whether a retry should happen or not are defined by the RetryPolicy class. The rules for whether a client should retry a request or not, as well as how many times it should retry and the time interval between them are defined on the `RetryPolicy` class.
+
+```scala
+val retryCondition: PartialFunction[Try[Nothing], Boolean] = {
+  case Throw(error) => error match {
+    case e: TooManyRequestsException => true
+    case _ => false
+  }
+  case _ => false
+}
+
+val retryPolicy = RetryPolicy.tries(3, retryCondition)
+
+val retryFilter = new RetryExceptionsFilter[Request, Response](
+   retryPolicy, timer, statsReceiver)
+```
+
+The example above defines a retry filter, which will retry every request that fails with `TooManyrequestsException`, and will do it for at most 3 times, including the first attempt. The `.tries` factory method uses [jittered backoffs](http://www.awsarchitectureblog.com/2015/03/backoff.html) between retries.
+
+Finagle also allows you to specify your own backoff strategy, in case you need more control.
+
+```scala
+val backoffs = Stream(1.second, 4.seconds, 8.seconds)
+val retryPolicy = RetryPolicy.backoff(backoffs)(retryCondition)
+```
+
+First retry will occur after 1 second, then after 4 seconds if it fails again, and so on...
 
 ### Circuit Breakers
+
+remember that just as failures cascade, so do delays. While you are waiting or retrying, scarce resources are being used (threads, memory, TCPIP ports, database connections) that cannot be used for other requests.
+
+that's why we need a circuit breaker...
+
+### Tracing
 
 
 
@@ -68,13 +106,13 @@ client(req) within 1.second
 
 Finagle clients interfaces are exposed, by convention, by objects named after the protocol implementations. For the HTTP protocol, the syntax for creating a new client would be something like:
 
-```scala
+```
 Http.newClient("api-host:port")
 ```
 
 There are also client implementation of other protocols such as Redis, Mysql, Memcached, etc.
 
-```scala
+```
 Redis.newClient(...)
 Mysql.newClient(...)
 ...
