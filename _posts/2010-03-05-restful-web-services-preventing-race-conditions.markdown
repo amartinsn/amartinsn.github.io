@@ -1,6 +1,7 @@
 ---
 layout:     post
 title:      "RESTful Web Services: Preventing Race Conditions"
+permalink:  "restful-web-services-preventing-race-conditions"
 date:       2010-03-05
 comments:   true
 tags:

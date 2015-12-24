@@ -1,7 +1,8 @@
 ---
 layout:     post
 title:      "Agile Patient Diagnostic"
-date:       2008-08-12
+permalink:  "agile-patient-diagnostic"
+date:       2008-05-22
 comments:   true
 tags:
 - agile
