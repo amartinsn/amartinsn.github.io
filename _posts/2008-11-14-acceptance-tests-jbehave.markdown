@@ -13,10 +13,10 @@ tags:
 Since [JBehave 2.0](http://jbehave.org) was released in September, I've been using it on my current project to verify the acceptance criteria for the features we are implementing, ensuring that the web interface is following the right workflow, and is displaying the data as expected, as well as some other important elements.
 
 ### What is JBehave?
-JBehave is a framework for Behaviour-Driven Development, that allows customers and developers to work together more closely on features for the system. They get together to discuss and define a set of executable criteria (scenarios) for each of the features that will be used to determine if they are fully implemented or not. The cool thing is that the scenario execution produces an easy-to-read output, so that customers can keep track of the implementation status.
+JBehave is a framework for [Behaviour-Driven Development](http://behaviour-driven.org), that allows customers and developers to work together more closely on features for the system. They get together to discuss and define a set of executable criteria (scenarios) for each of the features that will be used to determine if they are fully implemented or not. The cool thing is that the scenario execution produces an easy-to-read output, so that customers can keep track of the implementation status.
 
 ### An Example
-In this example, I'm not covering all the bits and pieces about writing and running acceptance tests with JBehave. If you want to see it in details, there's a very good introduction article here. The intention is to show how we are doing it on my project, integrating with Selenium and using the Page Objects pattern.
+In this example, I'm not covering all the bits and pieces about writing and running acceptance tests with JBehave. If you want to see it in details, there's a very good introduction article [here](http://www.ryangreenhall.com/articles/bdd-by-example.html). The intention is to show how we are doing it on my project, integrating with [Selenium](http://selenium.openqa.org/) and using the [Page Objects](http://code.google.com/p/webdriver/wiki/PageObjects) pattern.
 
 #### New Feature
 
@@ -63,7 +63,7 @@ After defining the scenarios on the text file, it's time to map each scenario st
 
 Initially, for each step, we were extracting the code sniped from Selenium IDE record and placing into it. But it felt a bit clumsy, with code duplication in some spots. It quickly reminded me how hard it is to maintain a suite of tests when it starts evolve and there is not enough effort on refactoring. We wanted to avoid duplication and come up with a more elegant and reusable solution.
 
-One day my friend Uday Rayala came up with the idea of using the Page Objects pattern for writing our acceptance tests, so that we could encapsulate the logic to interact and verify page state into these objects. The first time I heard about it was from Simon Stewart, when he was in Sydney for the JAOO conference. He said that they implemented WebDriver based on this pattern, and showed me some examples. Here is a definition, extracted from the WebDriver wikipage:
+One day my friend Uday Rayala came up with the idea of using the Page Objects pattern for writing our acceptance tests, so that we could encapsulate the logic to interact and verify page state into these objects. The first time I heard about it was from [Simon Stewart](http://pubbitch.org/blog/), when he was in Sydney for the JAOO conference. He said that they implemented [WebDriver](http://code.google.com/p/webdriver/) based on this pattern, and showed me some examples. Here is a definition, extracted from the WebDriver wikipage:
 
 
 > Within your web app's UI there are areas that your tests interact with. A Page Object simply models these as objects within the test code. This reduces the amount of duplicated code and means that if the UI changes, the fix need only be applied in one place.

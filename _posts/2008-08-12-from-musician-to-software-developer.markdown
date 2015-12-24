@@ -8,7 +8,6 @@ tags:
 - coding
 - music
 ---
-
 Before start working as a software developer on 2002, I spent three years being a musician. I played drums in a handful of bands from pop to contemporary jazz, and of course, also a lot of rock and roll! I had great time doing this, I met most of my friends during this period, and it taught me quite a few lessons that I can use in other areas than music, especially in software development.
 
 Mastering music (drums), and software development require a lot of dedication, both on reading and practicing.

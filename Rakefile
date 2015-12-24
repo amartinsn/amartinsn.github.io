@@ -4,9 +4,7 @@ require "tmpdir"
 require "bundler/setup"
 require "jekyll"
 
-
 GITHUB_REPONAME = "amartinsn/amartinsn.github.io"
-
 
 desc "Generate blog files"
 task :generate do
