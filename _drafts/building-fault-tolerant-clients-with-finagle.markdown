@@ -44,7 +44,7 @@ def timeoutFilter[Req, Rep](duration: Duration) = {
 
 Then we can create a HTTP client with support for timeouts, just by hooking the filter to the existing client instance.
 
-```scala
+```scalascala
 val clientWithTimeout = timeoutFilter(1.second) andThen client
 ```
 
@@ -56,15 +56,11 @@ client(req) within 1.second
 
 ### Retries
 
-Calls to external services might fail for several reasons, and are classified as **transient failures** and **service failures**. Transient failures, has nothing to do with the service itself, but to a resource that is temporarily under load and cannot respond accordingly. They occur for short periods of time.
+Calls to external services might fail for several reasons and the `RetryFilter`, when hooked into the client, will be responsible for coordinating the retries on these service executions. Retries are not restricted to failed responses, it's also possible to retry successful responses.
 
-On the other hand Service failures lasts longer, and generally requires some sort of intervention to get fixed. You should have an alternative strategy for when that happens. Fail fast is a good candidate as we'll see later on.
+By default clients will retry any request that doesn't write anything to the output or throws any kind of `WriteException`. But the retry behavior is easily extensible  and can be applied to pretty much any situation.
 
-Transient failures are good candidates for retries, as they don't take long to heal. It increases reliability and reduces operational costs with development.
-
-The `RetryFilter` handles exactly the case of a service failure. It acts coordinating retries of service executions that returned either successful or error (exceptions) responses.
-
-The rules for defining whether a retry should happen or not are defined by the RetryPolicy class. The rules for whether a client should retry a request or not, as well as how many times it should retry and the time interval between them are defined on the `RetryPolicy` class.
+The rules for defining whether a retry should happen or not, as well as the total number of retries and the time interval between them are defined on the `RetryPolicy` class.
 
 ```scala
 val retryCondition: PartialFunction[Try[Nothing], Boolean] = {
@@ -81,16 +77,22 @@ val retryFilter = new RetryExceptionsFilter[Request, Response](
    retryPolicy, timer, statsReceiver)
 ```
 
-The example above defines a retry filter, which will retry every request that fails with `TooManyrequestsException`, and will do it for at most 3 times, including the first attempt. The `.tries` factory method uses [jittered backoffs](http://www.awsarchitectureblog.com/2015/03/backoff.html) between retries.
+The code above defines a retry filter, which will retry every request that fails with `TooManyrequestsException`, and will do it for at most 3 times, including the first attempt. The `.tries` factory method uses [jittered backoffs](http://www.awsarchitectureblog.com/2015/03/backoff.html) between retries.
 
-Finagle also allows you to specify your own backoff strategy, in case you need more control.
+Finagle also allows you to specify your own backoff strategy, in case you need more control over the time interval between executions.
 
 ```scala
 val backoffs = Stream(1.second, 4.seconds, 8.seconds)
 val retryPolicy = RetryPolicy.backoff(backoffs)(retryCondition)
 ```
 
-First retry will occur after 1 second, then after 4 seconds if it fails again, and so on...
+#### a note on service retries
+
+Most common causes of service failures involves problems in the network or on the remote system, which won't be resolved right away. So be careful when defining backoffs strategies and try not to use immediate retries, as they are likely to fail again for the exactly same reason.
+
+On the other hand, using longer intervals might as well bring undesired results, specially from clients perspective. They will have to wait longer for service responses, risking pushing response time past timeout configuration.
+
+[Michael Nygard](http://www.michaelnygard.com) has an excellent [book](https://www.goodreads.com/book/show/1069827.Release_It_) on the subject where he recommends the queue-and-retry strategy for a slow retry, responding something to the user right away. The goal is to ensure that once the remote service is healthy again the overall system will be able to recover.
 
 ### Circuit Breakers
 
