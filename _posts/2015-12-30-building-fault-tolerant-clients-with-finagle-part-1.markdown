@@ -7,12 +7,12 @@ tags:
 - scala
 - finagle
 ---
-We've been using Finagle quite a lot on our current project, so I decided to dig into the `Client` implementation in order to check if we are properly using it and understand what else it could offer us.
+We've been using [Finagle](http://twitter.github.io/finagle) quite a lot on our current project, so I decided to dig into the [Client](http://twitter.github.io/finagle/guide/Clients.html) implementation in order to check if we are properly using it and understand what else it could offer us.
 
 Finagle currently ships with client implementation for protocols such as **HTTP**, **MySql**, **Redis**, **Memcached**, and is [extensible](https://twitter.github.io/finagle/guide/Extending.html) for any protocol implementation. Initializing a HTTP client for example, would be as simple as:
 
 ```scala
-val client = Http.newClient("example.com:80")
+val client = Http.client.newService("example.com:80")
 ```
 
 This creates a new client for the host and port specified, and from that it's fairly simple to send requests out and work with responses as follows:
@@ -35,7 +35,7 @@ But as we all know, the only certainty we have when integrating with external se
 
 It's really important to understand these types of failures and take them into account when defining clients that will act as integration points with external services.
 
-Currently Finalge client implementation comes with support to **Timeouts**, **Retries**, **Circuit Breakers**, **Tracing**, **Rate Limiting**, among other features, and it can also be customized by composing with custom `Filter` and `Service` implementations.
+Currently Finagle client implementation comes with support to **Timeouts**, **Retries**, **Circuit Breakers**, **Tracing**, **Rate Limiting**, among other features, and it can also be customized by composing with custom `Filter` and `Service` implementations.
 
 ### Timeouts
 
@@ -109,7 +109,7 @@ Recently I was working integrating with a service that only allowed my client ke
 
 Looking at Finagle codebase I came across the [RequestSemaphoreFilter](https://github.com/twitter/finagle/blob/master/finagle-core/src/main/scala/com/twitter/finagle/filter/RequestSemaphoreFilter.scala) implementation which uses Twitter's [AsyncSemaphore](https://github.com/twitter/util/blob/master/util-core/src/main/scala/com/twitter/concurrent/AsyncSemaphore.scala) to grant permits and enqueue waiters when no more permits are available. That was roughly what I was looking for, except for the fact that it doesn't take time into account.
 
-[Moses Nakamura](https://twitter.com/mnnakamura) introduced me to the recent implemented [AsyncMeter](https://github.com/twitter/util/blob/master/util-core/src/main/scala/com/twitter/concurrent/AsyncMeter.scala), which has a similar behavior to the semaphore implementation, but adding time into the game. I could easily configure a new meter which releases 1 new permit every 100 milliseconds (10 per second), and allows at most 1000 waiters to be enqueued, as demonstrated on the snippet below.
+[Moses Nakamura](https://twitter.com/mnnakamura) introduced me to the recently implemented [AsyncMeter](https://github.com/twitter/util/blob/master/util-core/src/main/scala/com/twitter/concurrent/AsyncMeter.scala), which has a similar behavior to the semaphore implementation, but adding time into the game. I could easily configure a new meter which releases 1 new permit every 100 milliseconds (10 per second), and allows at most 1000 waiters to be enqueued, as demonstrated on the snippet below.
 
 ```scala
 val meter = AsyncMeter.newMeter(1, 100.milliseconds, 1000)
