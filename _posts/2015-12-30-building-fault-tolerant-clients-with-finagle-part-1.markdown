@@ -22,7 +22,6 @@ val req = Request("/foo", ("my-query-string", "bar"))
 req.host = "example.com"
 
 val resp: Future[Response] = client(req)
-
 ```
 
 There's also another handy method for retrieving page content based on a HTTP url, which currently doesn't support HTTPS.

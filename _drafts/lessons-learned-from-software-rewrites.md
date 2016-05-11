@@ -8,25 +8,27 @@ tags:
 - refactoring
 ---
 
-By the end of 2013 I joined a team challenging myself to help them improve one of the most critical products on my company’s portfolio. One of its components was an API, built back in 2004 and was used by pretty much all other products in our organization. This API was implemented using Java and the EJB stack. It had two interfaces with clients, the EJB client interface and a feature incomplete HTTP (RESTfulish) interface, built on top of that EJB client.
-
-A couple of years before I join this team, a group of developers made a great effort to rewrite this API from scratch. They continued using Java but chose other technologies such as Spring and Jersey, which was a good decision in my opinion. The features were now exposed as RESTful webservices and most importantly, they introduced a decent suite of tests, which was quite hard on the EJB stack. The new architecture is better described on the picture below:
+By the end of 2013 I joined a team challenging myself to help them improve their software ecosystem, which is part of one of the most critical areas inside the organization. The most important component in this ecosystem is the Java + EJB API, built back in 2004, responsible for registering, authenticating, and granting users access to all products inside the organization. It had two main interfaces to the outside world, the Java client and a feature incomplete HTTP webservice built on top of the Java client, as shown on the diagram:
 
 ![](/assets/article_images/lessons-learned-from-software-rewrites/initial.png)
 
-### Consequences of rewriting from scratch
-
-The new API was indeed much easier to use than the other one and was fully tested, which gave the team much more confidence to extend it. But writing a new system from scratch also introduced some undesired consequences.
-
-With the new implementation ready to rollout, clients needed to prioritize this migration on their backlogs. Most of them did it but a few ones didn't, preventing the team from shutting the old system down. That was the scenario I found when I joined them in 2013.
+A couple of years before I join this team, a group of developers made a great effort to rewrite this API from scratch. All features were mapped, reimplemented on a new stack, and exposed as RESTful webservices. The team also took advantage of this effort and introduced a decent suite of automated tests, which was really painful to accomplish in the EJB stack. The new architecture is  described on the picture below:
 
 ![](/assets/article_images/lessons-learned-from-software-rewrites/rebuild.png)
 
-As you can see from the picture above, there are two APIs doing pretty much the same thing, one used by most of our clients and another still used by a few ones. And to make things worse, both systems share the same database, which today is our most critical pain point.
+### Consequences of rewriting from scratch
 
-There's a lot out there talking about the problems of having shared databases and I won't go into details on that. Sam Newman wrote about that on his new book Building Microservices. Also Martin Fowler describes this pattern (or anti-pattern) in greater detail on one of his signature series books, Enterprise Integration Patterns.
+The new API was indeed easier to use, and the introduction of automated tests gave the team much more confidence to continue improving it. But it also introduced some undesired consequences.
 
-For us, the main problem was that, for every changes on either systems, such as new features or bug fixes, which triggered a change in the database, it would potentially break the other system, causing a ripple effect through every application that uses it. As a result, any database change required an extra effort from the team maintaining the other system, which was turning our development process much less responsive to business demands. This is what Mary and Tom Poppendieck calls demand of failure. Definitely not a wise way to spend your company's money.
+#### Duplicate implementations
+
+With the new API released most of the users migrated to the new implementation, but for some other ones, the cost of performing this migration was so expensive that product managers ended up never prioritizing it, as they would have to compromise features that were much more valuable to them. This scenario blocked the team from shutting down the old system, and since then we've been carrying the cost of having two services for the same purpose.
+
+#### The problem with shared databases
+
+There's a lot out there talking about the problems of having shared databases between systems. For us, the main problem was that, for every change on any of the systems that triggered a change in the database, that would potentially break the other systems, causing a ripple effect through every application using them.
+
+As a result, our development process ended up tailored to try to mitigate this risk. Every database change required an extra effort from the teams maintaining the other systems to make sure nothing was going to break. That turned our development process much less responsive to business demands.
 
 ### Our plan to improve this architecture
 
