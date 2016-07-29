@@ -7,7 +7,7 @@ tags:
 - software design
 - refactoring
 ---
-By the end of 2013 I joined a team working on one of [Globo](http://globo.com)’s core products, the platform responsible for user identification and authorization within all our products. With the increasing necessity to know more about our users, to be able to offer them a better experience on our products, my main challenge was to help this team improve the current software architecture, which was old and unreliable, impacting the cost of developing new features.
+A couple of years ago I joined a team working on one of [Globo](http://globo.com)’s core products, the platform responsible for user identification and authorization within all our products. With the increasing necessity to know more about our users, to be able to offer them a better experience on our products, my main challenge was to help this team improve the current software architecture, which was old and unreliable, impacting the cost of developing new features.
 
 The main service, called “Version3”, with all functionalities was implemented back in 2004, using Java and the EJB stack. All services talking to it were restricted to use Java, as the only integration point were the EJB clients. As time passed and development teams started creating systems using technologies other than Java, the company felt they needed a better solution, one that was agnostic to any programming language, so they decided to build “Version4”, a feature compatible RESTful implementation of “Version3”.
 
@@ -41,7 +41,7 @@ To make things even more interesting, after adding some performance tests to the
 
 With that scenario in hand, it was clear that we needed to simplify the overall architecture in order to start gaining development speed. Our goal was to have a single implementation, with a simple and robust architecture, but we knew we couldn’t have it straight away, so we decided to use an approach inspired on Toyota’s [improvement katas](http://blog.crisp.se/2013/05/14/jimmyjanlen/improvement-theme-simple-and-practical-toyota-kata), to step-by-step head towards that direction.
 
-####Getting to know how people are using our services
+####Understanding how people are using our services
 
 Before getting our hands dirty we wanted to understand the scope of the work, so we started collecting system usage metrics to find out how our clients were using our services, and from that discover the features that were actually being used and the ones no one cared about. The result was going to be used as input for our subsequent efforts, both to eliminate dead features and to prioritize the ones we were going to start implementing on the new architecture. We used [Codahale Metrics](http://metrics.dropwizard.io/) for collecting these metrics, but there are plenty of other alternatives out there. After a few weeks we’ve already had enough data to start electing the first features to be removed.
 
@@ -49,7 +49,7 @@ Before getting our hands dirty we wanted to understand the scope of the work, so
 
 While working on this project I met my friend [Joshua Kerievsky](https://www.industriallogic.com/people/joshua) in one of his visits at Globo.com. I was sharing with him some of our learnings and challenges we were facing, then he mentioned a refactoring strategy he teaches in [one of his workshops](https://www.industriallogic.com/onsite-workshops/testing-and-refactoring/), that could be helpful for us to get where we wanted to be. The goal is to remove dead code from your codebase as they introduce unnecessary complexity, specially on the parts that are integrating with them. Once potential candidates were spot, they were put into some sort of code quarantine for a period of time to make sure no one was actually using them, and then deleted completely. We spend a few months doing that and **ended up reducing the number of features by ~40%**, which was a great return of investment.
 
-####Create a Strangler Application and slowly getting rid of the old systems
+####Creating a Strangler Application to slowly get rid of the old systems
 
 The metrics we’d collected were also useful to rank the most important features and from that elect the ones we would start tackling. For every piece of functionality we created a suite of [characterization tests](http://c2.com/cgi/wiki?CharacterizationTest) where we verified exactly how it was supposed to behave and we also took advantage of that to start using a technique called [continuous integration](https://en.wikipedia.org/wiki/Continuous_integration), that allowed us to automatically check, on every build, that it was still working as expected. That increased the level of confidence of the team to implement the functionality on the new stack, which was based on [Scala](http://www.scala-lang.org/) and [Finagle](http://twitter.github.io/finagle/).
 
