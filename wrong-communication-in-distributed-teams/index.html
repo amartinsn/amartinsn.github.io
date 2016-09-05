@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <meta charset="utf-8">
+  <!-- (1) Optimize for mobile versions: http://goo.gl/EOpFl -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- (1) force latest IE rendering engine: bit.ly/1c8EiC9 -->
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+  <title>Wrong Communication In Distributed Teams</title>
+  <!-- <meta name="description" content="<p>One of the big challenges faced by distributed teams is how to get over the communication gap created by the physical distances that separates them. We all know that communication, either verbal or non-verbal, is fundamental for any project to be delivered successfully. When a team is good at communicating, they cultivate a more effective sense of collectivity and cooperation, having faster feedback, by sharing information (knowledge) and having valuable discussions.</p>
+" /> -->
+
+  <meta name="HandheldFriendly" content="True" />
+  <meta name="MobileOptimized" content="320" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:site" content="@amartinsn" />
+    <meta name="twitter:title" content="Wrong Communication In Distributed Teams" />
+    <meta name="twitter:image" content="http://alexmartins.me/assets/images/author.jpg" />
+    
+    <meta name="twitter:description"  content="One of the big challenges faced by distributed teams is how to get over the communication gap created by the physical distances that separates them. We all know that communication, either verbal or..." />
+    
+  
+
+  <meta property="og:site_name" content="Alexandre Martins" />
+  <meta property="og:title" content="Wrong Communication In Distributed Teams"/>
+  
+  <meta property="og:description" content="One of the big challenges faced by distributed teams is how to get over the communication gap created by the physical distances that separates them. We all know that communication, either verbal or..." />
+  
+  <meta property="og:image" content="http://alexmartins.me/assets/images/author.jpg" />
+  <meta property="og:url" content="http://alexmartins.me/wrong-communication-in-distributed-teams" >
+  <meta property="og:type" content="blog" />
+  <meta property="article:published_time" content="2009-09-01T00:00:00-03:00">
+
+  <link rel="canonical" href="http://alexmartins.me/wrong-communication-in-distributed-teams">
+
+  <link rel="shortcut icon" href="/assets/images/favicon.ico">
+  <link rel="stylesheet" href="//brick.a.ssl.fastly.net/Linux+Libertine:400,400i,700,700i/Open+Sans:400,400i,700,700i">
+  <link href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
+
+  <link rel="stylesheet" type="text/css" media="screen" href="/css/main.css" />
+  <link rel="stylesheet" type="text/css" media="print" href="/css/print.css" />
+</head>
+
+  <body itemscope itemtype="http://schema.org/Article">
+    <!-- header start -->
+
+<!-- <a href="http://alexmartins.me" class="logo-readium"><span class="logo" style="background-image: url(/assets/images/author.jpg)"></span></a> -->
+
+<!-- header end -->
+
+    <main class="content" role="main">
+      <article class="post">
+        
+        <div class="noarticleimage">
+          <div class="post-meta">
+            <h1 class="post-title">Wrong Communication In Distributed Teams</h1>
+            <div class="cf post-meta-text">
+              <div class="author-image" style="background-image: url(/assets/images/author.jpg)">Blog Logo</div>
+              <a class="author-name" href="http://alexmartins.me" itemprop="author" itemscope itemtype="http://schema.org/Person">Alexandre Martins</a>
+              on
+              <time datetime="2009-09-01T00:00:00-03:00">01 Sep 2009</time>
+              <!-- , tagged on <span class="post-tag-">, <a href="/tag/"></a></span> -->
+            </div>
+          </div>
+        </div>
+        <br>
+        <br>
+        
+        <section class="post-content">
+          <div class="post-reading">
+            <span class="post-reading-time"></span> read
+          </div>
+          <a name="topofpage"></a>
+          <p>One of the big challenges faced by distributed teams is how to get over the communication gap created by the physical distances that separates them. We all know that communication, either verbal or non-verbal, is fundamental for any project to be delivered successfully. When a team is good at communicating, they cultivate a more effective sense of collectivity and cooperation, having faster feedback, by sharing information (knowledge) and having valuable discussions.</p>
+
+<p>But this is not quite the real world for distributed development teams. It’s much harder, not to say almost impossible, to know what exactly is happening on each other’s mind. What problems and technical challenges are they facing? What are they doing now? What points are they considering when designing a new feature? How important is for them to write tests? Are they following the project development standards?</p>
+
+<h3>Blame the &quot;Bandwidth Limited&quot; Communication Tools!</h3>
+
+<blockquote>
+<p>Software development teams, by the nature of their work, needs to discuss and assess different ideas to solve complex problems. And they are very difficult to communicate when using tools such as email or telephone, which on the book they call “bandwidth limited”. And those are exactly the ones available for most distributed teams. So face-to-face communication suits better for this kind of discussions, using the assistance of diagrams or sketches, not to mention the use of body language. This would give us immediate feedback, just by looking into the other person’s eyes, which communicate understanding.</p>
+</blockquote>
+
+<p><cite><a href="http://tinyurl.com/kpoxmx">The Organization and Architecture of Innovation: Managing the Flow of Technology</a> (with some modifications)</cite></p>
+
+<p>And as you can&#39;t always minimize distances to allow verbal communication, you have to look for other ways, and maximizing non-verbal communications is definitely a road to go down.</p>
+
+<h3>Some Bad Outcomes</h3>
+
+<h4>Poor Code Quality</h4>
+
+<ul>
+<li><p><strong>Code Duplication</strong> (<a href="http://www.c2.com/cgi/wiki?DuplicatedCode">see</a>)
+It&#39;s quite usual. For example, the guy wants to load a XML file as a String so that he can perform some assertions over the result. He will implements something like a
+FileLoader class. But what he doesn&#39;t know is that another developer has already implemented a class with this behaviour.</p></li>
+<li><p><strong>Reinventing the wheel</strong> (<a href="http://en.wikipedia.org/wiki/Reinventing_the_wheel">see</a>)
+This is partially caused by lack of communication and partially a result of the programmer&#39;s discipline. When adding a new library to the project the team must have a discussion and look for the benefits earned by using it. Before adding a XML parsing library that you&#39;re used to, have a quick chat with the team will let you know if is there any other parsing library being used. Maybe someone could make a walk-through with you on it. But it is your responsibility to know how to use it afterwards.</p></li>
+<li><p><strong>Code For The Others</strong> (and for yourself)
+When coding, you should always ask yourself if your peers would be able to understand what are you producing. Better still, you should ask if you would easily understand it again in a couple of weeks from now. It&#39;s quite common when coding, you get contextualized with what you need to do to deliver that functionality. This context will always get lost after finishing, unless you share it with the others or document it. There are <a href="http://tinyurl.com/m73tjb">some</a> <a href="http://tinyurl.com/3jms4t">good</a> <a href="http://tinyurl.com/lxr9ke">materials</a> <a href="http://tinyurl.com/n34a2h">out</a> <a href="http://tinyurl.com/mkh47l">there</a> that <a href="http://tinyurl.com/lxj2qn">shows</a> you how to write clean and readable code.</p></li>
+<li><p><strong>Broken Builds</strong>
+In a distributed team, a broken build not only just affects the people in your room, it also affects people in rooms into other cities. So reverting a broken build should be taken into account, specially when you have a slow build, then definitely the commiter would get himself into a big problem! Imagine a long build that takes about 30 minutes for example, and someone commits something broken. If he fixes it really quickly, it still may take 1 hour for the other team to be able to commit its changes and consequently 1 hour and a half lost in productivity in the other cities. It&#39;s all about communication - the quicker the build, the quicker the feedback. So a fast and successful build is mandatory!</p></li>
+</ul>
+
+<h4>Fear of Refactoring</h4>
+
+<p>Poor code quality results in fear of refactoring. Who hasn&#39;t been in a situation, working on a tightly coupled system, where it was quite hard to do any refactoring? Any attempt would propagate the changes deep in the source code, ending up <a href="http://www.catb.org/%7Eesr/jargon/html/Y/yak-shaving.html">shaving the yak</a>, not going anywhere.</p>
+
+<h4>Absence of Trust</h4>
+
+<p>I see this one as a result of the other two I mentioned above. When your team is biased to go off the tracks when trying to comply with code standards, some precautionary measures are generally created to avoid the worse.</p>
+
+<p>I&#39;ve seen a case where a pair, assigned to implement a story, and almost completing the development, ended up realising that another pair was also looking at it. Don&#39;t ask me why!</p>
+
+<p>I&#39;ve also seen people creating triggers on the version control system, so that for each commit from one team, the other received an email with all the commit information. This is good in one side, because you can easily identify cowboy commiters that don&#39;t write tests. But this is also used to check if the code is acceptable, reverting if not!</p>
+
+<h3>My Current Experience</h3>
+
+<p>The team I&#39;m currently working with is facing some of these problems, and during all last week, when I was on the other side of the fence, visiting the other part of out team on Tasmania, this became even more highlighted. Although we were having daily stand-up meetings, I felt like I was missing something, specially because there was another team in Melbourne joining us and I still didn&#39;t know how it was going to work out. Chatting with my friend <a href="http://www.markhneedham.com/">Mark Needham</a> about it, he recommended me a book called <a href="http://tinyurl.com/kpoxmx">The Organization and Architecture of Innovation: Managing the Flow of Technology</a>, where there&#39;s a chapter dedicated exclusively to this point, and that I could probably get some ideas of how to overcome this problem.</p>
+
+<h4>Taking actions</h4>
+
+<blockquote>
+<p>It seems obvious that an organization that wants its technical staff members to communicate needs to ensure the distances among them are minimized. Unfortunately, the traditional and most common form of office configuration does just the opposite. Not to mention when they are in separated buildings.</p>
+</blockquote>
+
+<p>The quote above also extracted from the book, doesn&#39;t tell anything new, and that&#39;s exactly one of the issues we wanted to fix. Now, with three teams we agreed that we would need to have them communicating face-to-face more often. So the rule is that every week we should have at least one person from each team visiting a different one. Apart from that, we are continuing with our <a href="http://en.wikipedia.org/wiki/Stand-up_meeting">daily stand-up meetings</a>, each team separately, and later on another daily meeting, but between teams (in the Scrum world called <a href="http://agilecommons.org/posts/d551a84f06">Scrum of Scrums</a>). This one involves, by default, only the iteration manager and the tech lead, but everyone else is also welcome to attend.</p>
+
+<p>We also had to put more effort on improving the non-verbal communication, as they are more required on distributed teams. With this separation teams have to be even more strict with what they permit or not in the codebase. We introduced development tools such as <a href="http://checkstyle.sourceforge.net/">Checkstyle</a> and <a href="http://tinyurl.com/ktn6mn">compile with walls</a> to ensure this. Checkstyle acts as a hammer on misbehaved commiters and Compile With Walls ensures that project structure is being respected. Sometimes quite good threads (over IM or email) are created by people trying to understand why a Checkstyle rule has failed.</p>
+
+        </section>
+        <footer class="post-footer">
+          <section class="share">
+            
+              
+                <a class="icon-twitter" href="http://twitter.com/share?text=Wrong+Communication+In+Distributed+Teams&amp;url=http://alexmartins.me/wrong-communication-in-distributed-teams"
+                  onclick="window.open(this.href, 'twitter-share', 'width=550,height=255');return false;">
+                <i class="fa fa-twitter"></i><span class="hidden">twitter</span>
+                </a>
+              
+            
+              
+            
+              
+            
+          </section>
+        </footer>
+        <div class="bottom-teaser cf">
+          <h5 class="index-headline featured"><span>Written by</span></h5>
+          <section class="author">
+            <div class="author-image" style="background-image: url(/assets/images/author.jpg)">Blog Logo</div>
+            <h4>Alexandre Martins</h4>
+            <p class="bio">Tech Lead and Agile Coach. Currently helping build the technology vision and architecture of Globo's video streaming platform.</p>
+            <p class="published">Published <time datetime="2009-09-01 00:00">01 Sep 2009</time></p>
+          </section>
+          
+        </div>
+        
+        <div id="disqus_thread"></div>
+        <script type="text/javascript">
+            /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+            var disqus_shortname = 'alexmartins'; // required: replace example with your forum shortname
+
+            /* * * DON'T EDIT BELOW THIS LINE * * */
+            (function() {
+                var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+                dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+                (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+            })();
+        </script>
+        <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+        
+      </article>
+    </main>
+    <div class="bottom-closer">
+
+    </div>
+    <script src="https://code.jquery.com/jquery-1.11.1.min.js"></script>
+<script type="text/javascript" src="/assets/js/jquery.fitvids.js"></script>
+<script type="text/javascript" src="/assets/js/index.js"></script>
+<script type="text/javascript" src="/assets/js/readingTime.min.js"></script>
+<script>
+(function ($) {
+  "use strict";
+  $(document).ready(function(){
+
+    var $window = $(window),
+    $image = $('.post-image-image, .teaserimage-image');
+
+      $window.on('scroll', function() {
+        var top = $window.scrollTop();
+
+        if (top < 0 || top > 1500) { return; }
+        $image
+          .css('transform', 'translate3d(0px, '+top/3+'px, 0px)')
+          .css('opacity', 1-Math.max(top/700, 0));
+      });
+      $window.trigger('scroll');
+
+      var height = $('.article-image').height();
+      $('.post-content').css('padding-top', height + 'px');
+
+      $('a[href*=#]:not([href=#])').click(function() {
+        if (location.pathname.replace(/^\//,'') == this.pathname.replace(/^\//,'')
+         && location.hostname == this.hostname) {
+          var target = $(this.hash);
+          target = target.length ? target : $('[name=' + this.hash.slice(1) +']');
+          if (target.length) {
+            $('html,body').animate({ scrollTop: target.offset().top }, 500);
+            return false;
+          }
+        }
+      });
+
+  });
+}(jQuery));
+</script>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-67119919-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+  </body>
+</html>

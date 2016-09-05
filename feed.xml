@@ -1,0 +1,609 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Alexandre Martins</title>
+    <description>Tech Lead and Agile Coach. Currently helping build the technology vision and architecture of Globo&#39;s video streaming platform.
+</description>
+    <link>http://alexmartins.me/</link>
+    <atom:link href="http://alexmartins.me/feed.xml" rel="self" type="application/rss+xml" />
+    <pubDate>Mon, 05 Sep 2016 10:33:29 -0300</pubDate>
+    <lastBuildDate>Mon, 05 Sep 2016 10:33:29 -0300</lastBuildDate>
+    <generator>Jekyll v2.4.0</generator>
+    
+      <item>
+        <title>Lessons Learned From Software Rewrites</title>
+        <description>&lt;p&gt;A couple of years ago I joined a team working on one of &lt;a href=&quot;http://globo.com&quot;&gt;Globo&lt;/a&gt;’s core products, the platform responsible for user identification and authorization within all our products. With the increasing necessity to know more about our users, to be able to offer them a better experience on our products, my main challenge was to help this team improve the current software architecture, which was old and unreliable, impacting the cost of developing new features.&lt;/p&gt;
+
+&lt;p&gt;The primary service, called “Version3”, with all functionalities was implemented back in 2004, using Java and the EJB stack. All services talking to it were restricted to use Java, as the only integration point were the EJB clients. As time passed and development teams started creating systems using technologies other than Java, the company felt they needed a better solution, one that was agnostic to any programming language, so they decided to build “Version4”, a feature compatible RESTful implementation of “Version3”.&lt;/p&gt;
+
+&lt;p&gt;Pretty much all features were rewritten on the new stack, some of them didn’t even make sense to the business anymore, but due to the lack of service usage metrics, they were also added to the scope, a massive waste of development effort.&lt;/p&gt;
+
+&lt;p&gt;With the release of the new HTTP implementation, most of the clients started using it right away, but a few other ones ended up continuing using the EJB implementation, as the cost of migrating all integrations points from EJB to HTTP was quite high. As a result, we ended up with two implementations of the same set of functionalities.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/article_images/lessons-learned-from-software-rewrites/initial-scenario.png&quot; alt=&quot;&quot;&gt;&lt;/p&gt;
+
+&lt;p&gt;This approach worked pretty well for some time until requests to new features started to pop out. The team had to implement them on both versions for compatibility, and those who have worked with EJB knows how hard and costly it is to test implementations, especially running acceptance tests when you need to spin up the container which is quite slow. That was affecting considerably the team’s ability to extend the system.&lt;/p&gt;
+
+&lt;h3&gt;Problems with duplicate systems&lt;/h3&gt;
+
+&lt;p&gt;The new service implementation brought many benefits to the organization, as HTTP is a language agnostic protocol, development teams could explore even more technologies and use the right ones for their problems at hand. But when I joined the team, with this scenario at hand, I started to realize that keeping these two implementations alive was introducing too many bottlenecks in the development process, as described below.&lt;/p&gt;
+
+&lt;h4&gt;Duplicate effort vs. partial feature availability&lt;/h4&gt;
+
+&lt;p&gt;For every new feature request to the platform, the development team had to check with the users of “Version3” if they would also need that new feature, and based on that decide if they were implementing it on both systems or not. Bug fixes were a waste as developers had to fix and test them on both systems. We needed to find of getting rid of this duplicate effort.&lt;/p&gt;
+
+&lt;h4&gt;Both systems sharing the same database&lt;/h4&gt;
+
+&lt;p&gt;With both systems sharing that same database, it became more expensive to maintain them, as for every change on any of the systems that triggered a change in the database, that would potentially break the other one, causing a ripple effect through every application using them. As a consequence, the development process became more bureaucratic and less responsive to business demands, as developers needed to double check that both systems were working as expected.&lt;/p&gt;
+
+&lt;p&gt;For one of the features, I decided to write down all the times spent on every development stage and create a &lt;a href=&quot;https://en.wikipedia.org/wiki/Value_stream_mapping&quot;&gt;value stream map&lt;/a&gt; to understand how this delay was impacting our cycle time. I found out that this extra effort in validating systems after a database change took &lt;strong&gt;20% of the whole development process&lt;/strong&gt;!&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/article_images/lessons-learned-from-software-rewrites/vsm.png&quot; alt=&quot;&quot;&gt;&lt;/p&gt;
+
+&lt;p&gt;To make things even more exciting, after adding some performance tests to the HTTP implementation, we found out that it had serious performance issues, mostly because it was running on top of a &lt;a href=&quot;http://stackoverflow.com/questions/8362794/networked-systems-whats-the-difference-between-a-blocking-and-a-non-blocki&quot;&gt;blocking server architecture&lt;/a&gt;. Also, some of the core features were tightly coupled with some outdated services that were slowing down significantly response times.&lt;/p&gt;
+
+&lt;h3&gt;Our plan to improve this architecture&lt;/h3&gt;
+
+&lt;p&gt;With that scenario in hand, it was clear that we needed to simplify the overall design to start gaining development speed. Our goal was to have a single implementation, with a straightforward and robust architecture, but we knew we couldn’t have it straight away, so we decided to use an approach inspired on Toyota’s &lt;a href=&quot;http://blog.crisp.se/2013/05/14/jimmyjanlen/improvement-theme-simple-and-practical-toyota-kata&quot;&gt;improvement katas&lt;/a&gt;, to step-by-step head towards that direction.&lt;/p&gt;
+
+&lt;h4&gt;Understanding how people are using our services&lt;/h4&gt;
+
+&lt;p&gt;Before getting our hands dirty we wanted to understand the scope of the work, so we started collecting system usage metrics to find out how our clients were using our services, and from that discover the features that were being used and the others no one cared. The result was going to be used as input for our subsequent efforts, both to eliminate dead features and to prioritize the ones we were going to start implementing the new architecture. We used &lt;a href=&quot;http://metrics.dropwizard.io/&quot;&gt;Codahale Metrics&lt;/a&gt; for collecting these metrics, but there are plenty of other alternatives out there. After a few weeks, we’ve already had enough data to start electing the first features to be removed.&lt;/p&gt;
+
+&lt;h4&gt;Reducing workload by eliminating &amp;quot;dead&amp;quot; features&lt;/h4&gt;
+
+&lt;p&gt;While working on this project, I met my friend &lt;a href=&quot;https://www.industriallogic.com/people/joshua&quot;&gt;Joshua Kerievsky&lt;/a&gt; in one of his visits at Globo.com. I was sharing with him some of our learnings and challenges we were facing, then he mentioned a refactoring strategy he teaches in &lt;a href=&quot;https://www.industriallogic.com/onsite-workshops/testing-and-refactoring/&quot;&gt;one of his workshops&lt;/a&gt;, that could be helpful for us to get where we wanted to be. The goal is to remove dead code from your codebase as they introduce unnecessary complexity, in particular on the parts that are integrating with them. I remember once pairing with my colleague &lt;a href=&quot;https://twitter.com/andrerigon&quot;&gt;Andre&lt;/a&gt;; we were tracing down the process of creating a new user, which was slow at the time. To our surprise we found out that&amp;#39;s because it was querying the database 31 times within a single execution, mostly doing work related to dead features. Once potential candidates were identified, they were put into a code quarantine for a few weeks to make sure no one was using them, and then deleted completely. We spent a few months doing that and &lt;strong&gt;ended up reducing the number of features by ~40%&lt;/strong&gt;, which was a good return on investment.&lt;/p&gt;
+
+&lt;h4&gt;Creating a Strangler Application to slowly get rid of the old systems&lt;/h4&gt;
+
+&lt;p&gt;The metrics we’d collected were also useful to rank the most important features and from that select the ones we would start tackling. For every piece of functionality, we created a suite of &lt;a href=&quot;http://c2.com/cgi/wiki?CharacterizationTest&quot;&gt;characterization tests&lt;/a&gt; where we verified exactly how it was supposed to behave, and we also took advantage of that to start using a technique called &lt;a href=&quot;https://en.wikipedia.org/wiki/Continuous_integration&quot;&gt;continuous integration&lt;/a&gt;, that allowed us to automatically check, on every build, that it was still working as expected. That increased the level of confidence of the team to implement the functionality on the new stack, which was based on &lt;a href=&quot;http://www.scala-lang.org/&quot;&gt;Scala&lt;/a&gt; and &lt;a href=&quot;http://twitter.github.io/finagle/&quot;&gt;Finagle&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;We used a technique called &lt;a href=&quot;http://www.martinfowler.com/bliki/StranglerApplication.html&quot;&gt;Strangler Application&lt;/a&gt; to rewrite every feature into the new stack. As &lt;a href=&quot;http://martinfowler.com/&quot;&gt;Martin Fowler&lt;/a&gt; describes in his post, &lt;em&gt;it works by gradually creating a new system around the edges of the old one, letting it grow slowly over several years until the old system is strangled&lt;/em&gt;. The reason why we decided to go with that approach was that the whole process needed to be extremely transparent to the users of our services. To make that happen we’ve implemented a HTTP &lt;a href=&quot;http://www.enterpriseintegrationpatterns.com/ContentBasedRouter.html&quot;&gt;Content-Based Router&lt;/a&gt; that intercepted every request to our services, and where we could tell which implementation it was going to use to handle specific endpoints. So once a functionality was implemented on the new stack, with all characterization tests passing, all we needed to do was to tell the router to use this new implementation, instead of the old one, and everyone consuming this endpoint would be automatically using the new implementation! This strategy would also allow us to rollback to the old version if something wrong happened.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/article_images/lessons-learned-from-software-rewrites/strangle.png&quot; alt=&quot;&quot;&gt;&lt;/p&gt;
+
+&lt;h3&gt;Takeaways&lt;/h3&gt;
+
+&lt;p&gt;Software rewrite is a quite painful process, no matter which strategy you choose to use. On another experience, we decided to rebuild the whole thing in parallel, while the old system was in production, and I remember we dedicating a lot of effort trying to catch up with the old system, as it continued growing. The Strangle Application strategy is the one that worked for me, although it’s a long process to get there. I left the project a year ago and last time I heard from them, they were still working on that. It all will depend on your scenario.&lt;/p&gt;
+</description>
+        <pubDate>Thu, 28 Jul 2016 00:00:00 -0300</pubDate>
+        <link>http://alexmartins.me/2016/07/28/lessons-learned-from-software-rewrites.html</link>
+        <guid isPermaLink="true">http://alexmartins.me/2016/07/28/lessons-learned-from-software-rewrites.html</guid>
+        
+        <category>architecture</category>
+        
+        <category>software design</category>
+        
+        <category>refactoring</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Building Fault Tolerant Clients With Finagle - Part 1</title>
+        <description>&lt;p&gt;We&amp;#39;ve been using &lt;a href=&quot;http://twitter.github.io/finagle&quot;&gt;Finagle&lt;/a&gt; quite a lot on our current project, so I decided to dig into the &lt;a href=&quot;http://twitter.github.io/finagle/guide/Clients.html&quot;&gt;Client&lt;/a&gt; implementation in order to check if we are properly using it and understand what else it could offer us.&lt;/p&gt;
+
+&lt;p&gt;Finagle currently ships with client implementation for protocols such as &lt;strong&gt;HTTP&lt;/strong&gt;, &lt;strong&gt;MySql&lt;/strong&gt;, &lt;strong&gt;Redis&lt;/strong&gt;, &lt;strong&gt;Memcached&lt;/strong&gt;, and is &lt;a href=&quot;https://twitter.github.io/finagle/guide/Extending.html&quot;&gt;extensible&lt;/a&gt; for any protocol implementation. Initializing a HTTP client for example, would be as simple as:&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;client&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Http&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;client&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;newService&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&amp;quot;example.com:80&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;This creates a new client for the host and port specified, and from that it&amp;#39;s fairly simple to send requests out and work with responses as follows:&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;req&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Request&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&amp;quot;/foo&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&amp;quot;my-query-string&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&amp;quot;bar&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;))&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;req&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;host&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&amp;quot;example.com&amp;quot;&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;resp&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Response&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;client&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;req&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;There&amp;#39;s also another handy method for retrieving page content based on a HTTP url, which currently doesn&amp;#39;t support HTTPS.&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;resp&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Response&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Http&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fetchUrl&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&amp;quot;http://example.com&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;But as we all know, the only certainty we have when integrating with external services is that it will fail at some point in time. That will happen for lots of different reasons such as network problems, bugs on the service, unavailability, etc.&lt;/p&gt;
+
+&lt;p&gt;It&amp;#39;s really important to understand these types of failures and take them into account when defining clients that will act as integration points with external services.&lt;/p&gt;
+
+&lt;p&gt;Currently Finagle client implementation comes with support to &lt;strong&gt;Timeouts&lt;/strong&gt;, &lt;strong&gt;Retries&lt;/strong&gt;, &lt;strong&gt;Circuit Breakers&lt;/strong&gt;, &lt;strong&gt;Tracing&lt;/strong&gt;, &lt;strong&gt;Rate Limiting&lt;/strong&gt;, among other features, and it can also be customized by composing with custom &lt;code&gt;Filter&lt;/code&gt; and &lt;code&gt;Service&lt;/code&gt; implementations.&lt;/p&gt;
+
+&lt;h3&gt;Timeouts&lt;/h3&gt;
+
+&lt;p&gt;Nowadays pretty much every application needs to integrate with other services through the network. In case of any problem with the service or the network, timeouts are used to tell the client when it&amp;#39;s time to give up and keep going, instead of waiting for a response that might never come.&lt;/p&gt;
+
+&lt;p&gt;The &lt;a href=&quot;https://github.com/twitter/finagle/blob/master/finagle-core/src/main/scala/com/twitter/finagle/service/TimeoutFilter.scala&quot;&gt;TimeoutFilter&lt;/a&gt; are used to configure global timeouts, that will be applied to every request performed by the client.&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;timeoutFilter&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Req&lt;/span&gt;, &lt;span class=&quot;kt&quot;&gt;Rep&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;](&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;duration&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Duration&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;timer&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;DefaultTimer&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;twitter&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;TimeoutFilter&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Req&lt;/span&gt;, &lt;span class=&quot;kt&quot;&gt;Rep&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;](&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;duration&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;timer&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;clientWithTimeout&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;timeoutFilter&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mf&quot;&gt;1.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;second&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;andThen&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;client&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;But it&amp;#39;s also possible to specify the timeout criteria on request level, which will take precedence over the global timeout configuration.&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;n&quot;&gt;client&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;req&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;within&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;1.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;second&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h3&gt;Retries&lt;/h3&gt;
+
+&lt;p&gt;When a call to a service results on failure, timeout or is successful but returned an undesired result, there&amp;#39;s the chance of retrying the request on a hope for a successful and desired result.&lt;/p&gt;
+
+&lt;p&gt;The &lt;a href=&quot;https://github.com/twitter/finagle/blob/master/finagle-core/src/main/scala/com/twitter/finagle/service/RetryFilter.scala&quot;&gt;RetryFilter&lt;/a&gt;, when hooked into the client stack, acts coordinating the retries of service executions. By default clients will retry any request that doesn&amp;#39;t write anything to the output or throws any kind of &lt;code&gt;WriteException&lt;/code&gt;. But the retry behavior can be easily customized and applied to pretty much any situation.&lt;/p&gt;
+
+&lt;p&gt;The conditions for whether a retry will happen or not, as well as the total number of retries and the time interval between them are defined on the &lt;a href=&quot;https://github.com/twitter/finagle/blob/master/finagle-core/src/main/scala/com/twitter/finagle/service/RetryPolicy.scala&quot;&gt;RetryPolicy&lt;/a&gt; class.&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;retryCondition&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;PartialFunction&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Try&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Nothing&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]&lt;/span&gt;, &lt;span class=&quot;kt&quot;&gt;Boolean&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Throw&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;error&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;error&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;match&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;TooManyRequestsException&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;_&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;false&lt;/span&gt;
+  &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;_&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;false&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;retryPolicy&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;RetryPolicy&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tries&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;3&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;retryCondition&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;retryFilter&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;RetryExceptionsFilter&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Request&lt;/span&gt;, &lt;span class=&quot;kt&quot;&gt;Response&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;](&lt;/span&gt;
+   &lt;span class=&quot;n&quot;&gt;retryPolicy&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;timer&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;statsReceiver&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;The code above defines a retry filter, which will retry every request that fails with &lt;code&gt;TooManyrequestsException&lt;/code&gt;, and will do it for at most 3 times, including the first attempt. The &lt;code&gt;.tries&lt;/code&gt; factory method uses &lt;a href=&quot;http://www.awsarchitectureblog.com/2015/03/backoff.html&quot;&gt;jittered back-offs&lt;/a&gt; between retries.&lt;/p&gt;
+
+&lt;p&gt;Finagle also allows you to specify your own back-off strategy, in case you need more control over the time interval between executions.&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;backoffs&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Stream&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mf&quot;&gt;1.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;second&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;4.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;seconds&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;8.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;seconds&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;retryPolicy&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;RetryPolicy&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;backoff&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;backoffs&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;retryCondition&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h4&gt;a note on service retries&lt;/h4&gt;
+
+&lt;p&gt;As I mentioned earlier, most common causes of service failures involves problems in the network or on the remote system, which won&amp;#39;t be resolved right away. So be careful when defining back-off strategies and try not to use immediate retries, as they are likely to fail again for the exactly same reason.&lt;/p&gt;
+
+&lt;p&gt;On the other hand, using longer intervals might as well bring undesired results, specially from clients perspective. They will have to wait longer for service responses, risking pushing response time past timeout configuration.&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;http://www.michaelnygard.com&quot;&gt;Michael Nygard&lt;/a&gt; has an excellent &lt;a href=&quot;https://www.goodreads.com/book/show/1069827.Release_It_&quot;&gt;book&lt;/a&gt; on the subject where he recommends the queue-and-retry strategy for a slow retry, responding something to the user right away. The goal is to ensure that once the remote service is healthy again the overall system will be able to recover.&lt;/p&gt;
+
+&lt;h3&gt;Rate Limited Services&lt;/h3&gt;
+
+&lt;p&gt;Another important aspect to take into account is rate limiting. It has been widely adopted by most API vendors on the market, and is indeed a good practice to place them in front of services, specially those that will be exposed to the outside world. Rate limiting prevents brute force attacks and is also used to control access quotas for different client profiles.&lt;/p&gt;
+
+&lt;p&gt;Recently I was working integrating with a service that only allowed my client key to perform 10 requests within a second. So I wanted to find a way to make the Finagle client coordinate the calls to this API, and avoid as much as I could the propagation of any &lt;code&gt;HTTP 429 Too Many Requests&lt;/code&gt; errors to end users.&lt;/p&gt;
+
+&lt;p&gt;Looking at Finagle codebase I came across the &lt;a href=&quot;https://github.com/twitter/finagle/blob/master/finagle-core/src/main/scala/com/twitter/finagle/filter/RequestSemaphoreFilter.scala&quot;&gt;RequestSemaphoreFilter&lt;/a&gt; implementation which uses Twitter&amp;#39;s &lt;a href=&quot;https://github.com/twitter/util/blob/master/util-core/src/main/scala/com/twitter/concurrent/AsyncSemaphore.scala&quot;&gt;AsyncSemaphore&lt;/a&gt; to grant permits and enqueue waiters when no more permits are available. That was roughly what I was looking for, except for the fact that it doesn&amp;#39;t take time into account.&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://twitter.com/mnnakamura&quot;&gt;Moses Nakamura&lt;/a&gt; introduced me to the recently implemented &lt;a href=&quot;https://github.com/twitter/util/blob/master/util-core/src/main/scala/com/twitter/concurrent/AsyncMeter.scala&quot;&gt;AsyncMeter&lt;/a&gt;, which has a similar behavior to the semaphore implementation, but adding time into the game. I could easily configure a new meter which releases 1 new permit every 100 milliseconds (10 per second), and allows at most 1000 waiters to be enqueued, as demonstrated on the snippet below.&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;meter&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;AsyncMeter&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;newMeter&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mf&quot;&gt;100.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;milliseconds&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1000&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;There&amp;#39;s also the handy &lt;code&gt;.perSecond&lt;/code&gt; method, which simplifies this configuration and makes the code more readable.&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;meter&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;AsyncMeter&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;perSecond&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;10&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1000&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;From that I decided to make my first contribution to the project and implemented the &lt;a href=&quot;https://github.com/twitter/finagle/blob/develop/finagle-core/src/main/scala/com/twitter/finagle/filter/RequestMeterFilter.scala&quot;&gt;RequestMeterFilter&lt;/a&gt; using the &lt;code&gt;AsyncMeter&lt;/code&gt;. And as the docs states:&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;A &lt;code&gt;Filter&lt;/code&gt; that rate limits requests to a fixed rate over time by using the &lt;code&gt;AsyncMeter&lt;/code&gt; implementation. It can be used for slowing down access to throttled resources. Requests that cannot be enqueued to await a permit are failed immediately with a &lt;code&gt;Failure&lt;/code&gt; that signals that the work was never done, so it&amp;#39;s safe to re-enqueue.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;Hooking the filter to the client definition is just a matter of instantiating it and adding to the stack, as follows.&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;requestMeter&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;RequestMeterFilter&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;meter&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;limitedClient&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;requestMeter&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;andThen&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;client&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;This filter will execute a new request every 100 milliseconds and will allow 1000 requests to enqueue, waiting for their time to execute. Once the waiting queue reaches the max size, new requests will be dropped immediately.&lt;/p&gt;
+
+&lt;p&gt;On the next post I will continue exploring Finagle client features in greater detail, more specifically Circuit Breakers (Failure Accrual and Fail Fast), Monitoring and client Statistics. But the material presented here is enough to start building fault tolerant clients. Have fun!&lt;/p&gt;
+</description>
+        <pubDate>Wed, 30 Dec 2015 00:00:00 -0200</pubDate>
+        <link>http://alexmartins.me/2015/12/30/building-fault-tolerant-clients-with-finagle-part-1.html</link>
+        <guid isPermaLink="true">http://alexmartins.me/2015/12/30/building-fault-tolerant-clients-with-finagle-part-1.html</guid>
+        
+        <category>microservices</category>
+        
+        <category>scala</category>
+        
+        <category>finagle</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Listen to the tests, they tell smells in your code...</title>
+        <description>&lt;p&gt;Recently, reading &lt;a href=&quot;http://www.amazon.com/Growing-Object-Oriented-Software-Guided-Tests/dp/0321503627&quot;&gt;Growing Object Oriented Software Guided Tests&lt;/a&gt;, written by &lt;a href=&quot;http://www.m3p.co.uk/blog&quot;&gt;Steve Freeman&lt;/a&gt; and &lt;a href=&quot;http://www.natpryce.com&quot;&gt;Nat Pryce&lt;/a&gt;, it reminded me of a project I worked on a while ago. It was a one year old system, poorly tested, integrating to a handful of other systems, and the code-base... well I prefer not to remember. Despite this scenario, I joined the team to help them implement some new functionalities.&lt;/p&gt;
+
+&lt;p&gt;I remember sometimes it was difficult to write tests, the classes were tightly coupled, with no clear responsibilities, several attributes, bloated constructors, etc. And despite our best effort, working around the bits that were preventing us from writing the tests, we felt we were getting down the wrong road, trying to do it in such a crappy code-base. As a result some of our tests were massive! A bunch of lines of mocks, stubs, and expectations, making it impossible to understand their purpose.&lt;/p&gt;
+
+&lt;h3&gt;What have I learned?&lt;/h3&gt;
+
+&lt;p&gt;Reading one of the book chapters I learned that the same qualities that makes an object easy to test also makes the code responsive to change. In my situation, the tests were telling me how clumsy the code was and how difficult it would be to extend it.&lt;/p&gt;
+
+&lt;p&gt;I also learned that when we come across a functionality that is difficult to test, asking ourselves how to test it is not enough, we also have to ask why is it difficult to test, and check whether it&amp;#39;s an opportunity to improve our code. The trick is to do it driven by tests, so we can get rapid feedback on code&amp;#39;s internal qualities and on whether it&amp;#39;s doing what it&amp;#39;s supposed to do.&lt;/p&gt;
+
+&lt;p&gt;So they introduced a variation for the well-known TDD cycle— &lt;em&gt;&lt;strong&gt;&amp;quot;Write a failing test&amp;quot; =&amp;gt; &amp;quot;Make the test pass&amp;quot; =&amp;gt; &amp;quot;Refactor&amp;quot;&lt;/strong&gt;&lt;/em&gt;. As described on the figure below (extracted from the book), if we&amp;#39;re finding it hard to write the next failing test for our application, we should look again at the design of the production code and often refactor it before moving on, until we get to the point that we can write tests that reads well.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/article_images/2010-07-26-listen-to-the-tests-they-tell-smells-in-your-code/tdd-cycle.png&quot; alt=&quot;Extracted from Growing Object-Oriented Software, Guided By Tests— Steve Freeman and Nat Pryce&quot;&gt;&lt;/p&gt;
+
+&lt;p&gt;Extracted from Growing Object-Oriented Software, Guided By Tests— Steve Freeman and Nat Pryce&lt;/p&gt;
+
+&lt;h3&gt;An Example of a Smell Tests Might Be Telling You&lt;/h3&gt;
+
+&lt;h4&gt;Reference data rather than behavior&lt;/h4&gt;
+
+&lt;p&gt;When applying &lt;a href=&quot;http://pragprog.com/articles/tell-dont-ask&quot;&gt;&amp;quot;Tell Don&amp;#39;t Ask&amp;quot;&lt;/a&gt; or &lt;a href=&quot;http://pragprog.com/articles/tell-dont-ask&quot;&gt;&amp;quot;Law of Demeter&amp;quot;&lt;/a&gt; consistently, we end up with a coding style where we tend to pass behavior into the system instead of pulling values up through the stack. So picking up the famous Paperboy example, before refactoring the code applying the &amp;quot;Law of Demeter&amp;quot; the code and test would look something along the lines of the snippet showed below.&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Paperboy&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;collect_money&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;customer&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;due_amount&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;due_amount&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;customer&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;wallet&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;cash&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;raise&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;InsuficientFundsError&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;else&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;customer&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;wallet&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;cash&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;due_amount&lt;/span&gt;
+      &lt;span class=&quot;vi&quot;&gt;@total_collected&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;due_amount&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;n&quot;&gt;it&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;should collect money from customer&amp;quot;&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;do&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;customer&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;Customer&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;ss&quot;&gt;:wallet&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;Wallet&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;new&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;ss&quot;&gt;:amount&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;200&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;paperboy&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;Paperboy&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;new&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;paperboy&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;total_collected&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;should&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;paperboy&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;collect_money&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;customer&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;50&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;customer&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;wallet&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;cash&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;should&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;150&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;paperboy&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;total_collected&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;should&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;50&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;We can easily see that the test is telling us it knows too much detail about Customer class implementation. We can see its internals, which objects it&amp;#39;s related to, and even worse, we&amp;#39;re also exposing implementation details of its peers. So it&amp;#39;s clear for me that it needs some design improvement. My main goal here is to hide Customer implementation details from the users of the Paperboy class. Which means that I don&amp;#39;t wanna see anything but Customer and Moneyclasses referenced on the test!&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Paperboy&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;collect_money&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;customer&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;due_amount&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;vi&quot;&gt;@collected_amount&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;customer&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;pay&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;due_amount&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;n&quot;&gt;it&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;should collect money from customer&amp;quot;&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;do&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;customer&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;Customer&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;ss&quot;&gt;:total_cash&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;200&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;paperboy&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;Paperboy&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;new&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;paperboy&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;total_collected&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;should&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;paperboy&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;collect_money&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;customer&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;50&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;customer&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;total_cash&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;should&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;150&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;paperboy&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;total_collected&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;should&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;50&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;The method &lt;code&gt;customer.pay(due_amount)&lt;/code&gt; wraps all the implementation detail up behind a single call. The client of paperboy no longer needs to know anything about the types in the chain. We&amp;#39;ve reduced the risk that a design change might cause ripples in remote parts of the codebase.&lt;/p&gt;
+
+&lt;p&gt;As well as hiding information, there&amp;#39;s a more subtle benefit from &amp;quot;Tell, Don&amp;#39;t Ask.&amp;quot; It forces us to make explicit and so name the interactions between objects, rather than leaving them implicit in the chain of getters. The shorter version above is much clearer about &lt;strong&gt;what&lt;/strong&gt; it&amp;#39;s for, not just &lt;strong&gt;how&lt;/strong&gt; it happens to be implemented.&lt;/p&gt;
+
+&lt;p&gt;All the logic necessary to collect the money is inside the &lt;code&gt;Customer&lt;/code&gt; object, so it doesn&amp;#39;t have to expose its state to its peers.&lt;/p&gt;
+
+&lt;p&gt;Now it&amp;#39;s safer to continue writing new failing tests to our objects. Remember, listen to the tests!&lt;/p&gt;
+</description>
+        <pubDate>Mon, 26 Jul 2010 00:00:00 -0300</pubDate>
+        <link>http://alexmartins.me/2010/07/26/listen-to-the-tests-they-tell-smells-in-your-code.html</link>
+        <guid isPermaLink="true">http://alexmartins.me/2010/07/26/listen-to-the-tests-they-tell-smells-in-your-code.html</guid>
+        
+        <category>ruby</category>
+        
+        <category>tdd</category>
+        
+        <category>object-oriented design</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>RESTful Web Services: Preventing Race Conditions</title>
+        <description>&lt;p&gt;One of the core premisses of RESTful web services is that HTTP should be seen as an application protocol rather than just a transport protocol. It comprises a whole bunch of semantics that allows us to build robust distributed systems. And for some cases, when multiple consumers manipulate the same resource, therefore changing its state, the solution should be robust enough to prevent the system to get into a race condition.&lt;/p&gt;
+
+&lt;h3&gt;But how HTTP could prevent that?&lt;/h3&gt;
+
+&lt;p&gt;HTTP provides a simple but powerful mechanism for aligning resource states by making use of &lt;a href=&quot;http://en.wikipedia.org/wiki/HTTP_ETag&quot;&gt;entity tag or ETag&lt;/a&gt; and &lt;a href=&quot;http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html&quot;&gt;conditional request headers&lt;/a&gt;. An &lt;code&gt;ETag&lt;/code&gt; is anything that uniquely identifies an entity, such as the ID associated with a persisted resource, a checksum of the entity headers and body, etc. If this resource changes—that is, when one or more of its headers, or its entity body, changes—then the entity tag changes accordingly, reflecting this new resource state.&lt;/p&gt;
+
+&lt;p&gt;When a response contains an &lt;code&gt;ETag&lt;/code&gt; associated to a resource state and you want to continue working with this same resource, it&amp;#39;s recommended to use this tag in subsequent requests (called conditional requests), otherwise the resource state might eventually become out of sync with service one, returning something like a &lt;code&gt;409 Conflict&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;Conditional requests happens when the current &lt;code&gt;ETag&lt;/code&gt; is supplied to a conditional request header, such as &lt;code&gt;If-Match&lt;/code&gt; or &lt;code&gt;If-None-Match&lt;/code&gt;, when user is requesting to update a resource for example. The service will then check the precondition, by comparing the current resource &lt;code&gt;ETag&lt;/code&gt; with the one provided in the request. If it&amp;#39;s satisfied than the server proceeds and process the request, otherwise it concludes that the resource has changed and responds with a &lt;code&gt;412 Precondition Failed&lt;/code&gt;.&lt;/p&gt;
+
+&lt;h4&gt;Example&lt;/h4&gt;
+
+&lt;p&gt;Given an online shop for home goods, where two people— &lt;strong&gt;admin1&lt;/strong&gt; and &lt;strong&gt;admin2&lt;/strong&gt; —are responsible for administrating its contents. In our scenario both administrators are trying to change the state of the same product (the Weber BBQ), around the same time. &lt;strong&gt;admin1&lt;/strong&gt; wants to lower the product price down to $300.00 and &lt;strong&gt;admin2&lt;/strong&gt; wants to change its state to &amp;quot;Not Available&amp;quot;. Firstly, both administrators &lt;code&gt;GET&lt;/code&gt; the current product state independently of one another by doing the following request:&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-javascript&quot; data-lang=&quot;javascript&quot;&gt;&lt;span class=&quot;nx&quot;&gt;GET&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;product&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;HTTP&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;mf&quot;&gt;1.1&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;Host&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;myshop&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;com&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;Returning the following resource (product) as response. Note that the service&amp;#39;s response contains an &lt;code&gt;ETag&lt;/code&gt; header.&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-javascript&quot; data-lang=&quot;javascript&quot;&gt;&lt;span class=&quot;nx&quot;&gt;HTTP&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;mf&quot;&gt;1.1&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;200&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;OK&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;Content&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;Length&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;265&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;Content&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;Type&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;application&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;json&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;ETag&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;686897696a7c876b7e&amp;quot;&lt;/span&gt;
+
+&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+  &lt;span class=&quot;s2&quot;&gt;&amp;quot;name&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;WeberFamilyBBQ&amp;quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+  &lt;span class=&quot;s2&quot;&gt;&amp;quot;description&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;Great for parties and cooks a neat roast too.&amp;quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+  &lt;span class=&quot;s2&quot;&gt;&amp;quot;price&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;399&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+  &lt;span class=&quot;s2&quot;&gt;&amp;quot;status&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;InStock&amp;quot;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;When &lt;strong&gt;admin1&lt;/strong&gt; does a conditional PUT, including an &lt;code&gt;If-Match&lt;/code&gt; header with the &lt;code&gt;ETag&lt;/code&gt; value from the previous &lt;code&gt;GET&lt;/code&gt;.&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-javascript&quot; data-lang=&quot;javascript&quot;&gt;&lt;span class=&quot;nx&quot;&gt;PUT&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;product&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;HTTP&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;mf&quot;&gt;1.1&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;Host&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;myshop&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;com&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;If&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;Match&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;686897696a7c876b7e&amp;quot;&lt;/span&gt;
+
+&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+  &lt;span class=&quot;s2&quot;&gt;&amp;quot;name&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;WeberFamilyBBQ&amp;quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+  &lt;span class=&quot;s2&quot;&gt;&amp;quot;description&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;Great for parties and cooks a neat roast too.&amp;quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+  &lt;span class=&quot;s2&quot;&gt;&amp;quot;price&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;399&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+  &lt;span class=&quot;s2&quot;&gt;&amp;quot;status&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;InStock&amp;quot;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;And as the product state hasn&amp;#39;t changed since the last request, then the request is thus successful! Notice that the response returns an updated &lt;code&gt;ETag&lt;/code&gt; value, reflecting the new product state.&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-javascript&quot; data-lang=&quot;javascript&quot;&gt;&lt;span class=&quot;nx&quot;&gt;HTTP&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;mf&quot;&gt;1.1&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;204&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;No&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;Content&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;ETag&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;616898r96a8cy86b8eee11&amp;quot;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;Little time after &lt;strong&gt;admin1&lt;/strong&gt; has updated the product, &lt;strong&gt;admin2&lt;/strong&gt; does another &lt;code&gt;PUT&lt;/code&gt; request to the same product, including the same &lt;code&gt;If-Match&lt;/code&gt; header with the &lt;code&gt;ETag&lt;/code&gt; value from the &lt;code&gt;GET&lt;/code&gt; request.&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-javascript&quot; data-lang=&quot;javascript&quot;&gt;&lt;span class=&quot;nx&quot;&gt;PUT&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;product&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;HTTP&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;mf&quot;&gt;1.1&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;Host&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;myshop&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;com&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;If&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;Match&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;686897696a7c876b7e&amp;quot;&lt;/span&gt;
+
+&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+  &lt;span class=&quot;s2&quot;&gt;&amp;quot;name&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;WeberFamilyBBQ&amp;quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+  &lt;span class=&quot;s2&quot;&gt;&amp;quot;description&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;Great for parties and cooks a neat roast too.&amp;quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+  &lt;span class=&quot;s2&quot;&gt;&amp;quot;price&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;399&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+  &lt;span class=&quot;s2&quot;&gt;&amp;quot;status&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&amp;quot;InStock&amp;quot;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;The service then determines that someone is trying to change the same product, using an out-of-date resource representation (&lt;code&gt;ETags&lt;/code&gt; are different!), and responds with a &lt;code&gt;412 Precondition Failed&lt;/code&gt; code. No race conditions whatsoever!&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-javascript&quot; data-lang=&quot;javascript&quot;&gt;&lt;span class=&quot;nx&quot;&gt;HTTP&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;mf&quot;&gt;1.1&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;412&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;Precondition&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;Failed&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h3&gt;Conclusion&lt;/h3&gt;
+
+&lt;p&gt;Although ETags and conditional request headers make up a powerful mechanism for dealing with concurrency, one thing to keep in mind is that, depending on the amount of computation performed by the server to generate an &lt;code&gt;ETag&lt;/code&gt;, response times might increase considerably. So use it only if you need it!&lt;/p&gt;
+
+&lt;p&gt;Special thanks to &lt;a href=&quot;http://jim.webber.name&quot;&gt;Jim Webber&lt;/a&gt; for helping me with this post. For more information on RESTful Web Services, check out his latest book (written together with &lt;a href=&quot;http://savas.me&quot;&gt;Savas Parastatidis&lt;/a&gt; and &lt;a href=&quot;http://iansrobinson.com&quot;&gt;Ian Robinson&lt;/a&gt;)— &lt;a href=&quot;http://www.amazon.com/gp/product/0596805829&quot;&gt;REST in Practice: Hypermedia and Systems Architecture&lt;/a&gt;.&lt;/p&gt;
+</description>
+        <pubDate>Fri, 05 Mar 2010 00:00:00 -0300</pubDate>
+        <link>http://alexmartins.me/restful-web-services-preventing-race-conditions</link>
+        <guid isPermaLink="true">http://alexmartins.me/restful-web-services-preventing-race-conditions</guid>
+        
+        <category>restful</category>
+        
+        <category>http</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Wrong Communication In Distributed Teams</title>
+        <description>&lt;p&gt;One of the big challenges faced by distributed teams is how to get over the communication gap created by the physical distances that separates them. We all know that communication, either verbal or non-verbal, is fundamental for any project to be delivered successfully. When a team is good at communicating, they cultivate a more effective sense of collectivity and cooperation, having faster feedback, by sharing information (knowledge) and having valuable discussions.&lt;/p&gt;
+
+&lt;p&gt;But this is not quite the real world for distributed development teams. It’s much harder, not to say almost impossible, to know what exactly is happening on each other’s mind. What problems and technical challenges are they facing? What are they doing now? What points are they considering when designing a new feature? How important is for them to write tests? Are they following the project development standards?&lt;/p&gt;
+
+&lt;h3&gt;Blame the &amp;quot;Bandwidth Limited&amp;quot; Communication Tools!&lt;/h3&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;Software development teams, by the nature of their work, needs to discuss and assess different ideas to solve complex problems. And they are very difficult to communicate when using tools such as email or telephone, which on the book they call “bandwidth limited”. And those are exactly the ones available for most distributed teams. So face-to-face communication suits better for this kind of discussions, using the assistance of diagrams or sketches, not to mention the use of body language. This would give us immediate feedback, just by looking into the other person’s eyes, which communicate understanding.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;&lt;cite&gt;&lt;a href=&quot;http://tinyurl.com/kpoxmx&quot;&gt;The Organization and Architecture of Innovation: Managing the Flow of Technology&lt;/a&gt; (with some modifications)&lt;/cite&gt;&lt;/p&gt;
+
+&lt;p&gt;And as you can&amp;#39;t always minimize distances to allow verbal communication, you have to look for other ways, and maximizing non-verbal communications is definitely a road to go down.&lt;/p&gt;
+
+&lt;h3&gt;Some Bad Outcomes&lt;/h3&gt;
+
+&lt;h4&gt;Poor Code Quality&lt;/h4&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;Code Duplication&lt;/strong&gt; (&lt;a href=&quot;http://www.c2.com/cgi/wiki?DuplicatedCode&quot;&gt;see&lt;/a&gt;)
+It&amp;#39;s quite usual. For example, the guy wants to load a XML file as a String so that he can perform some assertions over the result. He will implements something like a
+FileLoader class. But what he doesn&amp;#39;t know is that another developer has already implemented a class with this behaviour.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;Reinventing the wheel&lt;/strong&gt; (&lt;a href=&quot;http://en.wikipedia.org/wiki/Reinventing_the_wheel&quot;&gt;see&lt;/a&gt;)
+This is partially caused by lack of communication and partially a result of the programmer&amp;#39;s discipline. When adding a new library to the project the team must have a discussion and look for the benefits earned by using it. Before adding a XML parsing library that you&amp;#39;re used to, have a quick chat with the team will let you know if is there any other parsing library being used. Maybe someone could make a walk-through with you on it. But it is your responsibility to know how to use it afterwards.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;Code For The Others&lt;/strong&gt; (and for yourself)
+When coding, you should always ask yourself if your peers would be able to understand what are you producing. Better still, you should ask if you would easily understand it again in a couple of weeks from now. It&amp;#39;s quite common when coding, you get contextualized with what you need to do to deliver that functionality. This context will always get lost after finishing, unless you share it with the others or document it. There are &lt;a href=&quot;http://tinyurl.com/m73tjb&quot;&gt;some&lt;/a&gt; &lt;a href=&quot;http://tinyurl.com/3jms4t&quot;&gt;good&lt;/a&gt; &lt;a href=&quot;http://tinyurl.com/lxr9ke&quot;&gt;materials&lt;/a&gt; &lt;a href=&quot;http://tinyurl.com/n34a2h&quot;&gt;out&lt;/a&gt; &lt;a href=&quot;http://tinyurl.com/mkh47l&quot;&gt;there&lt;/a&gt; that &lt;a href=&quot;http://tinyurl.com/lxj2qn&quot;&gt;shows&lt;/a&gt; you how to write clean and readable code.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;Broken Builds&lt;/strong&gt;
+In a distributed team, a broken build not only just affects the people in your room, it also affects people in rooms into other cities. So reverting a broken build should be taken into account, specially when you have a slow build, then definitely the commiter would get himself into a big problem! Imagine a long build that takes about 30 minutes for example, and someone commits something broken. If he fixes it really quickly, it still may take 1 hour for the other team to be able to commit its changes and consequently 1 hour and a half lost in productivity in the other cities. It&amp;#39;s all about communication - the quicker the build, the quicker the feedback. So a fast and successful build is mandatory!&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h4&gt;Fear of Refactoring&lt;/h4&gt;
+
+&lt;p&gt;Poor code quality results in fear of refactoring. Who hasn&amp;#39;t been in a situation, working on a tightly coupled system, where it was quite hard to do any refactoring? Any attempt would propagate the changes deep in the source code, ending up &lt;a href=&quot;http://www.catb.org/%7Eesr/jargon/html/Y/yak-shaving.html&quot;&gt;shaving the yak&lt;/a&gt;, not going anywhere.&lt;/p&gt;
+
+&lt;h4&gt;Absence of Trust&lt;/h4&gt;
+
+&lt;p&gt;I see this one as a result of the other two I mentioned above. When your team is biased to go off the tracks when trying to comply with code standards, some precautionary measures are generally created to avoid the worse.&lt;/p&gt;
+
+&lt;p&gt;I&amp;#39;ve seen a case where a pair, assigned to implement a story, and almost completing the development, ended up realising that another pair was also looking at it. Don&amp;#39;t ask me why!&lt;/p&gt;
+
+&lt;p&gt;I&amp;#39;ve also seen people creating triggers on the version control system, so that for each commit from one team, the other received an email with all the commit information. This is good in one side, because you can easily identify cowboy commiters that don&amp;#39;t write tests. But this is also used to check if the code is acceptable, reverting if not!&lt;/p&gt;
+
+&lt;h3&gt;My Current Experience&lt;/h3&gt;
+
+&lt;p&gt;The team I&amp;#39;m currently working with is facing some of these problems, and during all last week, when I was on the other side of the fence, visiting the other part of out team on Tasmania, this became even more highlighted. Although we were having daily stand-up meetings, I felt like I was missing something, specially because there was another team in Melbourne joining us and I still didn&amp;#39;t know how it was going to work out. Chatting with my friend &lt;a href=&quot;http://www.markhneedham.com/&quot;&gt;Mark Needham&lt;/a&gt; about it, he recommended me a book called &lt;a href=&quot;http://tinyurl.com/kpoxmx&quot;&gt;The Organization and Architecture of Innovation: Managing the Flow of Technology&lt;/a&gt;, where there&amp;#39;s a chapter dedicated exclusively to this point, and that I could probably get some ideas of how to overcome this problem.&lt;/p&gt;
+
+&lt;h4&gt;Taking actions&lt;/h4&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;It seems obvious that an organization that wants its technical staff members to communicate needs to ensure the distances among them are minimized. Unfortunately, the traditional and most common form of office configuration does just the opposite. Not to mention when they are in separated buildings.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;The quote above also extracted from the book, doesn&amp;#39;t tell anything new, and that&amp;#39;s exactly one of the issues we wanted to fix. Now, with three teams we agreed that we would need to have them communicating face-to-face more often. So the rule is that every week we should have at least one person from each team visiting a different one. Apart from that, we are continuing with our &lt;a href=&quot;http://en.wikipedia.org/wiki/Stand-up_meeting&quot;&gt;daily stand-up meetings&lt;/a&gt;, each team separately, and later on another daily meeting, but between teams (in the Scrum world called &lt;a href=&quot;http://agilecommons.org/posts/d551a84f06&quot;&gt;Scrum of Scrums&lt;/a&gt;). This one involves, by default, only the iteration manager and the tech lead, but everyone else is also welcome to attend.&lt;/p&gt;
+
+&lt;p&gt;We also had to put more effort on improving the non-verbal communication, as they are more required on distributed teams. With this separation teams have to be even more strict with what they permit or not in the codebase. We introduced development tools such as &lt;a href=&quot;http://checkstyle.sourceforge.net/&quot;&gt;Checkstyle&lt;/a&gt; and &lt;a href=&quot;http://tinyurl.com/ktn6mn&quot;&gt;compile with walls&lt;/a&gt; to ensure this. Checkstyle acts as a hammer on misbehaved commiters and Compile With Walls ensures that project structure is being respected. Sometimes quite good threads (over IM or email) are created by people trying to understand why a Checkstyle rule has failed.&lt;/p&gt;
+</description>
+        <pubDate>Tue, 01 Sep 2009 00:00:00 -0300</pubDate>
+        <link>http://alexmartins.me/wrong-communication-in-distributed-teams</link>
+        <guid isPermaLink="true">http://alexmartins.me/wrong-communication-in-distributed-teams</guid>
+        
+        <category>agile</category>
+        
+        <category>project management</category>
+        
+        <category>organizational transformation</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Acceptance Tests With JBehave, Selenium &amp; Page Objects</title>
+        <description>&lt;p&gt;Since &lt;a href=&quot;http://jbehave.org&quot;&gt;JBehave 2.0&lt;/a&gt; was released in September, I&amp;#39;ve been using it on my current project to verify the acceptance criteria for the features we are implementing, ensuring that the web interface is following the right workflow, and is displaying the data as expected, as well as some other important elements.&lt;/p&gt;
+
+&lt;h3&gt;What is JBehave?&lt;/h3&gt;
+
+&lt;p&gt;JBehave is a framework for &lt;a href=&quot;http://behaviour-driven.org&quot;&gt;Behaviour-Driven Development&lt;/a&gt;, that allows customers and developers to work together more closely on features for the system. They get together to discuss and define a set of executable criteria (scenarios) for each of the features that will be used to determine if they are fully implemented or not. The cool thing is that the scenario execution produces an easy-to-read output, so that customers can keep track of the implementation status.&lt;/p&gt;
+
+&lt;h3&gt;An Example&lt;/h3&gt;
+
+&lt;p&gt;In this example, I&amp;#39;m not covering all the bits and pieces about writing and running acceptance tests with JBehave. If you want to see it in details, there&amp;#39;s a very good introduction article &lt;a href=&quot;http://www.ryangreenhall.com/articles/bdd-by-example.html&quot;&gt;here&lt;/a&gt;. The intention is to show how we are doing it on my project, integrating with &lt;a href=&quot;http://selenium.openqa.org/&quot;&gt;Selenium&lt;/a&gt; and using the &lt;a href=&quot;http://code.google.com/p/webdriver/wiki/PageObjects&quot;&gt;Page Objects&lt;/a&gt; pattern.&lt;/p&gt;
+
+&lt;h4&gt;New Feature&lt;/h4&gt;
+
+&lt;p&gt;Suppose the customer wanted to provide exclusive content for the user of the website. For that, we would have to implement an authentication framework, so that we could guarantee that only registered users would access that content. So the story looks like this:&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-text&quot; data-lang=&quot;text&quot;&gt;As an user
+I want to login into the website
+So that I can view the exclusive contents
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h4&gt;Defining Scenarios&lt;/h4&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-text&quot; data-lang=&quot;text&quot;&gt;Scenario: Invalid Username
+Given the user is on the login page
+ When the user types username wrong!
+  And the user types password 123456
+  And clicks the login button
+ Then the page should display Invalid Authentication message
+
+Scenario: Successful Login
+Given the user is on the login page
+ When the user types username alexandre
+  And the user types password 123456
+  And clicks the login button
+ Then the user should be redirected to home page
+  And the page should display welcome message to alexandre
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;Each scenario needs its own implementation, providing the necessary steps to be verified, in our case the LoginSteps class. Another improvement on version 2.0 is that it allows you to define multiple scenarios in a single file.&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-java&quot; data-lang=&quot;java&quot;&gt;&lt;span class=&quot;kd&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;kd&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;LoginScenarios&lt;/span&gt; &lt;span class=&quot;kd&quot;&gt;extends&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Scenario&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kd&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;LoginScenarios&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;kd&quot;&gt;super&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;LoginSteps&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;());&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h4&gt;Defining Steps (Integrating Selenium)&lt;/h4&gt;
+
+&lt;p&gt;After defining the scenarios on the text file, it&amp;#39;s time to map each scenario step to its implementation. Once you start mapping them you will come across ones that are already mapped, and will realise that defining new scenarios is just a matter of combining existing steps.&lt;/p&gt;
+
+&lt;p&gt;Initially, for each step, we were extracting the code sniped from Selenium IDE record and placing into it. But it felt a bit clumsy, with code duplication in some spots. It quickly reminded me how hard it is to maintain a suite of tests when it starts evolve and there is not enough effort on refactoring. We wanted to avoid duplication and come up with a more elegant and reusable solution.&lt;/p&gt;
+
+&lt;p&gt;One day my friend Uday Rayala came up with the idea of using the Page Objects pattern for writing our acceptance tests, so that we could encapsulate the logic to interact and verify page state into these objects. The first time I heard about it was from &lt;a href=&quot;http://pubbitch.org/blog/&quot;&gt;Simon Stewart&lt;/a&gt;, when he was in Sydney for the JAOO conference. He said that they implemented &lt;a href=&quot;http://code.google.com/p/webdriver/&quot;&gt;WebDriver&lt;/a&gt; based on this pattern, and showed me some examples. Here is a definition, extracted from the WebDriver wikipage:&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;Within your web app&amp;#39;s UI there are areas that your tests interact with. A Page Object simply models these as objects within the test code. This reduces the amount of duplicated code and means that if the UI changes, the fix need only be applied in one place.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-java&quot; data-lang=&quot;java&quot;&gt;&lt;span class=&quot;kd&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;kd&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;LoginSteps&lt;/span&gt; &lt;span class=&quot;kd&quot;&gt;extends&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Steps&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+
+    &lt;span class=&quot;nd&quot;&gt;@Given&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&amp;quot;the user is on the login page&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;kd&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;theUserIsOnTheLoginPage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;LoginPage&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;loginPage&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;LoginPage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;loginPage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;verifyPresenceOfUsernameAndPasswordFields&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;loginPage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;verifyPresenceOfLoginButton&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;nd&quot;&gt;@When&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&amp;quot;the user types username $username&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;kd&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;theUserTypesUsername&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;String&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;username&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;loginPage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;typeUsername&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;username&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;nd&quot;&gt;@When&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&amp;quot;the user types password $password&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;kd&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;theUserTypesPassword&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;String&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;password&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;loginPage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;typePassword&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;password&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;nd&quot;&gt;@When&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&amp;quot;clicks the login button&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;kd&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;clicksTheLoginButton&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;loginPage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;login&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;nd&quot;&gt;@Then&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&amp;quot;the page should display $errorMessage message&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;kd&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;thePageShouldDisplayErrorMessage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;String&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;errorMessage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;loginPage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;verifyPresenceOfErrorMessage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;errorMessage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;nd&quot;&gt;@Then&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&amp;quot;the user should be redirected to home page&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;kd&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;theUserShouldBeRedirectedToHomePage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;HomePage&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;homePage&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;HomePage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;homePage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;verifyPage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;nd&quot;&gt;@Then&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&amp;quot;the page should display welcome message to $user&amp;quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;kd&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;thePageShouldDisplayWelcomeMessage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;String&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;user&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;homePage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;verifyPresenceOfWelcomeMessageTo&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;user&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;kd&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LoginPage&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;loginPage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;LoginPage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Page&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;current&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;kd&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;HomePage&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;homePage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;HomePage&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Page&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;current&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;</description>
+        <pubDate>Fri, 14 Nov 2008 00:00:00 -0200</pubDate>
+        <link>http://alexmartins.me/acceptance-tests-with-jbehave-selenium-page-objects</link>
+        <guid isPermaLink="true">http://alexmartins.me/acceptance-tests-with-jbehave-selenium-page-objects</guid>
+        
+        <category>tdd</category>
+        
+        <category>java</category>
+        
+        <category>bdd</category>
+        
+        <category>page objects</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>From musician to software developer...</title>
+        <description>&lt;p&gt;Before start working as a software developer on 2002, I spent three years being a musician. I played drums in a handful of bands from pop to contemporary jazz, and of course, also a lot of rock and roll! I had great time doing this, I met most of my friends during this period, and it taught me quite a few lessons that I can use in other areas than music, especially in software development.&lt;/p&gt;
+
+&lt;p&gt;Mastering music (drums), and software development require a lot of dedication, both on reading and practicing.&lt;/p&gt;
+
+&lt;p&gt;In music, the first thing I did when I decided to take it seriously was to look for a music school to learn how to read and interpret music. Then I spent a long time reading books about techniques and rhythms, attending workshops, spending nights and weekends practicing to improve my ability and velocity. That was a very important step because during that period I could commit mistakes, drop the drumsticks whilst playing, and let all the ugliness happen. No one was watching me! The goal was not to sound good, but to stretch my limits, so I could be in perfect shape when performing with a band.&lt;/p&gt;
+
+&lt;p&gt;In software development, it’s pretty much the same, you have to read a lot (books, blogs, articles, magazines), learn programming languages (choose two or three to specialise, and get a higher overview of others), attend workshops, meet people, practice by trying and evaluating different technologies, creating a blog to post your experiences, &lt;a href=&quot;http://opensource.thoughtworks.com&quot;&gt;joining open-source projects&lt;/a&gt;, registering for &lt;a href=&quot;http://code.google.com/codejam&quot;&gt;coding competitions&lt;/a&gt;, solving some of the &lt;a href=&quot;http://codekata.pragprog.com&quot;&gt;CodeKata&lt;/a&gt; challenges, preferably &lt;a href=&quot;http://c2.com/cgi/wiki?PairProgramming&quot;&gt;pairing&lt;/a&gt; with someone else, in summary, stretch your limits!!!! (Have you seen this before? ☺) Doing so will give you more self-confidence for you to perform well during your show, at client site.&lt;/p&gt;
+</description>
+        <pubDate>Tue, 12 Aug 2008 00:00:00 -0300</pubDate>
+        <link>http://alexmartins.me/2008/08/12/from-musician-to-software-developer.html</link>
+        <guid isPermaLink="true">http://alexmartins.me/2008/08/12/from-musician-to-software-developer.html</guid>
+        
+        <category>career development</category>
+        
+        <category>coding</category>
+        
+        <category>music</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Measuring test effort</title>
+        <description>&lt;p&gt;One of the most difficult tasks for consultants is to influence business people to embrace and support test-driven development. Seems like they do &amp;quot;understand&amp;quot; the values, &amp;quot;agree&amp;quot; with that, but when it comes to put into practice the figure is generally a bit different. When I say to put into practice, I mean stick with it steadily, even when dealing with unexpected situations. A typical one could be of a project with delivery delays, a tight deadline, and invariant scope. By experience, when such situation happens, the first decision made is to cut off test development and give way code quality, in order to deliver faster. No matter how hard you try to revert it by showing them the bad outcomes for this decision, they simply ignore them and take the risks, just for the fact that there are no concrete risks, other than not delivering the software.&lt;/p&gt;
+
+&lt;p&gt;Not having a way to show managers that not writing tests, at least for the most critical functionalities, is indeed a concrete risk, has always puzzled me. One day while talking to &lt;a href=&quot;http://www.vinktank.com/&quot;&gt;Kristan Vingrys&lt;/a&gt; about this, he showed me a risk matrix he has been using to help him influencing people to understand test values. See the image:&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/article_images/2008-07-17-measuring-test-effort/test-matrix.png&quot; alt=&quot;&quot;&gt;&lt;/p&gt;
+
+&lt;p&gt;Basically it measures the rate of test coverage required and tells what type of tests (unit, functional) to be implemented based on the impact of the functionality to the business stakeholders and the amount of new code needed to implement it (you can be re-implementing it from an existent code). The more impact and likelihood for new technology the feature needs, the more test implementation it should have.&lt;/p&gt;
+
+&lt;p&gt;The ideal approach would be, for each implemented feature, the team is responsible to evaluate and make a decision on how much test effort they want to put in the story. The best time to make it is during the iteration planning meeting, so that the final output you get is both the iteration goal/features and the minimal of test effort to each of them.&lt;/p&gt;
+
+&lt;p&gt;And as generally all features has at least a minimum of significant business value, you will always have the guarantee of having these tested.&lt;/p&gt;
+</description>
+        <pubDate>Thu, 17 Jul 2008 00:00:00 -0300</pubDate>
+        <link>http://alexmartins.me/measuring-test-effort</link>
+        <guid isPermaLink="true">http://alexmartins.me/measuring-test-effort</guid>
+        
+        <category>agile</category>
+        
+        <category>project management</category>
+        
+        <category>tdd</category>
+        
+        <category>organizational transformation</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Agile Patient Diagnostic</title>
+        <description>&lt;p&gt;Last week, I went to a &lt;a href=&quot;http://tinyurl.com/44o6ku&quot;&gt;hospital in St Leonards&lt;/a&gt;, yes I was feeling sick, but now I&amp;#39;m fine. The thing is, while I was waiting to see the doctor my wife called my attention &amp;quot;Look, the doctors are having a stand-up meeting!!!!&amp;quot; (she&amp;#39;s been reading about agile...). That was really interesting! There were about six doctors standing, forming a circle, each of them reporting its patients diagnostics and what was being done to treat them. After each report, all the other doctors were free to provide their own opinion about the case, and so they kept going, one by one. After about 20 minutes the meeting was done. Cool!! I couldn&amp;#39;t go home without asking the doctor about that. He said they started doing that about one year ago and since then, the stress level in the hospital has been decreasing more and more, just for the fact that now, decisions are made in group and all the doctors have a general knowledge of what&amp;#39;s going on around.&lt;/p&gt;
+
+&lt;p&gt;The next day, speaking to my friend &lt;a href=&quot;http://blog.halvard.skogsrud.com&quot;&gt;Halvard Skogsrud&lt;/a&gt; at &lt;a href=&quot;http://thoughtworks.com&quot;&gt;ThoughtWorks&lt;/a&gt;, he said this hospital received loads of criticism on the way the staff was being overloaded. This is just another proof of how agile practices can enhance productivity and quality of your team.&lt;/p&gt;
+</description>
+        <pubDate>Thu, 22 May 2008 00:00:00 -0300</pubDate>
+        <link>http://alexmartins.me/agile-patient-diagnostic</link>
+        <guid isPermaLink="true">http://alexmartins.me/agile-patient-diagnostic</guid>
+        
+        <category>agile</category>
+        
+        <category>process improvement</category>
+        
+        
+      </item>
+    
+  </channel>
+</rss>
